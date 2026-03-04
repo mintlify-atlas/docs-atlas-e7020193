@@ -1,0 +1,396 @@
+---
+title: 'ClimateService'
+description: 'Actor for fetching historical climate data from Open-Meteo Archive API'
+---
+
+## Overview
+
+`ClimateService` is a Swift actor that fetches historical temperature data from the Open-Meteo Archive API. It retrieves temperature data for specific dates across multiple years, enabling climate trend analysis and historical comparisons.
+
+```swift
+actor ClimateService
+```
+
+**Source**: `BreezeApp/Services/ClimateService.swift:4`
+
+## Actor Isolation
+
+This service is implemented as an actor to ensure thread-safe access to its methods and properties. All async methods are actor-isolated and can be safely called from any context.
+
+## Shared Instance
+
+```swift
+static let shared = ClimateService()
+```
+
+A singleton instance of the service that can be accessed throughout the application.
+
+## Methods
+
+### fetchClimateData
+
+Fetch historical temperature data for a specific location across multiple years.
+
+```swift
+func fetchClimateData(
+    latitude: Double, 
+    longitude: Double
+) async throws -> [ClimateDataPoint]
+```
+
+<ParamField path="latitude" type="Double" required>
+  The latitude of the location to fetch climate data for
+</ParamField>
+
+<ParamField path="longitude" type="Double" required>
+  The longitude of the location to fetch climate data for
+</ParamField>
+
+**Returns**: `[ClimateDataPoint]` - An array of climate data points, sorted by year (ascending), each containing:
+- `year`: The year of the data point
+- `temperature`: The maximum temperature (°C) for that date in that year
+
+**Throws**:
+
+This method does not throw errors. Individual year fetch failures are caught and logged, but don't prevent the method from returning partial results.
+
+**Implementation Details**:
+
+The method fetches temperature data for the current date across the following years:
+- 1980
+- 1990
+- 2000
+- 2010
+- 2020
+- Current year
+
+```swift
+let years = [1980, 1990, 2000, 2010, 2020, currentYear]
+```
+
+For each year, it:
+1. Constructs the date string in `YYYY-MM-DD` format
+2. Makes an API request to the Open-Meteo Archive API
+3. Extracts the maximum temperature for that date
+4. Handles errors gracefully, logging failures without throwing
+
+```swift
+let dateString = String(format: "%d-%02d-%02d", year, month, day)
+```
+
+**Query Parameters**:
+- `latitude` and `longitude`: Location coordinates
+- `start_date` and `end_date`: Same date for single-day data
+- `daily`: Set to `temperature_2m_max` for maximum temperature
+- `timezone`: Set to "auto" for automatic timezone detection
+
+## Usage Examples
+
+### Basic Usage
+
+```swift
+let service = ClimateService.shared
+
+let dataPoints = await service.fetchClimateData(
+    latitude: 37.7749,
+    longitude: -122.4194
+)
+
+print("Climate data for today's date across years:")
+for point in dataPoints {
+    print("\(point.year): \(point.temperature)°C")
+}
+
+// Output example:
+// Climate data for today's date across years:
+// 1980: 18.5°C
+// 1990: 19.2°C
+// 2000: 20.1°C
+// 2010: 20.8°C
+// 2020: 21.5°C
+// 2026: 22.1°C
+```
+
+### Calculate Temperature Trend
+
+```swift
+func analyzeTemperatureTrend(latitude: Double, longitude: Double) async {
+    let service = ClimateService.shared
+    let dataPoints = await service.fetchClimateData(
+        latitude: latitude,
+        longitude: longitude
+    )
+    
+    guard dataPoints.count >= 2 else {
+        print("Insufficient data for trend analysis")
+        return
+    }
+    
+    let firstPoint = dataPoints.first!
+    let lastPoint = dataPoints.last!
+    
+    let tempChange = lastPoint.temperature - firstPoint.temperature
+    let yearSpan = lastPoint.year - firstPoint.year
+    let avgChangePerDecade = (tempChange / Double(yearSpan)) * 10
+    
+    print("Temperature Trend Analysis")
+    print("Period: \(firstPoint.year) - \(lastPoint.year)")
+    print("Temperature change: \(String(format: "%.2f", tempChange))°C")
+    print("Average change per decade: \(String(format: "%.2f", avgChangePerDecade))°C")
+}
+
+// Usage
+await analyzeTemperatureTrend(latitude: 37.7749, longitude: -122.4194)
+```
+
+### Display in SwiftUI Chart
+
+```swift
+import SwiftUI
+import Charts
+
+struct ClimateChartView: View {
+    @State private var dataPoints: [ClimateDataPoint] = []
+    @State private var isLoading = false
+    let latitude: Double
+    let longitude: Double
+    
+    var body: some View {
+        VStack {
+            Text("Historical Temperature Trend")
+                .font(.headline)
+                .padding()
+            
+            if isLoading {
+                ProgressView("Loading climate data...")
+            } else if dataPoints.isEmpty {
+                Text("No data available")
+                    .foregroundColor(.secondary)
+            } else {
+                Chart(dataPoints) { point in
+                    LineMark(
+                        x: .value("Year", point.year),
+                        y: .value("Temperature", point.temperature)
+                    )
+                    .foregroundStyle(.blue)
+                    
+                    PointMark(
+                        x: .value("Year", point.year),
+                        y: .value("Temperature", point.temperature)
+                    )
+                    .foregroundStyle(.blue)
+                }
+                .chartXAxis {
+                    AxisMarks(values: .automatic) { value in
+                        AxisGridLine()
+                        AxisValueLabel()
+                    }
+                }
+                .chartYAxis {
+                    AxisMarks { value in
+                        AxisGridLine()
+                        AxisValueLabel {
+                            if let temp = value.as(Double.self) {
+                                Text("\(Int(temp))°C")
+                            }
+                        }
+                    }
+                }
+                .frame(height: 300)
+                .padding()
+                
+                temperatureStats
+            }
+        }
+        .task {
+            await loadClimateData()
+        }
+    }
+    
+    var temperatureStats: some View {
+        VStack(spacing: 8) {
+            if let first = dataPoints.first, let last = dataPoints.last {
+                HStack {
+                    Text("\(first.year):")
+                        .foregroundColor(.secondary)
+                    Text("\(String(format: "%.1f", first.temperature))°C")
+                        .fontWeight(.semibold)
+                    
+                    Spacer()
+                    
+                    Text("\(last.year):")
+                        .foregroundColor(.secondary)
+                    Text("\(String(format: "%.1f", last.temperature))°C")
+                        .fontWeight(.semibold)
+                }
+                .padding(.horizontal)
+                
+                let change = last.temperature - first.temperature
+                Text("Change: \(String(format: "%+.1f", change))°C")
+                    .foregroundColor(change > 0 ? .red : .blue)
+                    .fontWeight(.medium)
+            }
+        }
+        .padding()
+        .background(Color.gray.opacity(0.1))
+        .cornerRadius(8)
+        .padding()
+    }
+    
+    func loadClimateData() async {
+        isLoading = true
+        defer { isLoading = false }
+        
+        let service = ClimateService.shared
+        dataPoints = await service.fetchClimateData(
+            latitude: latitude,
+            longitude: longitude
+        )
+    }
+}
+
+// Usage
+ClimateChartView(
+    latitude: 37.7749,
+    longitude: -122.4194
+)
+```
+
+## Error Handling
+
+The service handles errors gracefully by:
+1. Catching individual year fetch failures
+2. Logging errors to the console
+3. Continuing to fetch data for remaining years
+4. Returning partial results if some years fail
+
+```swift
+do {
+    let (data, _) = try await URLSession.shared.data(from: url)
+    let decoder = JSONDecoder()
+    let result = try decoder.decode(ClimateArchiveResponse.self, from: data)
+    
+    if let temp = result.daily?.temperatureMax?.first {
+        dataPoints.append(ClimateDataPoint(year: year, temperature: temp))
+    }
+} catch {
+    print("Error fetching climate data for \(year): \(error)")
+}
+```
+
+This approach ensures that temporary network issues or missing data for specific years don't prevent the entire operation from succeeding.
+
+## API Endpoint
+
+The service uses the Open-Meteo Archive API:
+
+```
+https://archive-api.open-meteo.com/v1/archive
+```
+
+This API provides historical weather data dating back to 1940.
+
+## Source Code
+
+```swift
+import Foundation
+
+/// Service for fetching historical climate data from Open-Meteo Archive API
+actor ClimateService {
+    static let shared = ClimateService()
+    
+    private let baseURL = "https://archive-api.open-meteo.com/v1/archive"
+    
+    /// Fetch historical temperature data for multiple years
+    func fetchClimateData(latitude: Double, longitude: Double) async throws -> [ClimateDataPoint] {
+        let today = Date()
+        let calendar = Calendar.current
+        let month = calendar.component(.month, from: today)
+        let day = calendar.component(.day, from: today)
+        let currentYear = calendar.component(.year, from: today)
+        
+        let years = [1980, 1990, 2000, 2010, 2020, currentYear]
+        
+        var dataPoints: [ClimateDataPoint] = []
+        
+        for year in years {
+            let dateString = String(format: "%d-%02d-%02d", year, month, day)
+            
+            var components = URLComponents(string: baseURL)!
+            components.queryItems = [
+                URLQueryItem(name: "latitude", value: String(latitude)),
+                URLQueryItem(name: "longitude", value: String(longitude)),
+                URLQueryItem(name: "start_date", value: dateString),
+                URLQueryItem(name: "end_date", value: dateString),
+                URLQueryItem(name: "daily", value: "temperature_2m_max"),
+                URLQueryItem(name: "timezone", value: "auto")
+            ]
+            
+            guard let url = components.url else { continue }
+            
+            do {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                let decoder = JSONDecoder()
+                let result = try decoder.decode(ClimateArchiveResponse.self, from: data)
+                
+                if let temp = result.daily?.temperatureMax?.first {
+                    dataPoints.append(ClimateDataPoint(year: year, temperature: temp))
+                }
+            } catch {
+                print("Error fetching climate data for \(year): \(error)")
+            }
+        }
+        
+        return dataPoints.sorted { $0.year < $1.year }
+    }
+}
+```
+
+## Performance Considerations
+
+### Sequential API Calls
+
+The current implementation makes sequential API calls for each year. For better performance, consider fetching all years in parallel:
+
+```swift
+await withTaskGroup(of: ClimateDataPoint?.self) { group in
+    for year in years {
+        group.addTask {
+            // Fetch data for year
+            return dataPoint
+        }
+    }
+    
+    for await result in group {
+        if let dataPoint = result {
+            dataPoints.append(dataPoint)
+        }
+    }
+}
+```
+
+### Caching
+
+Historical climate data doesn't change, making it ideal for caching:
+
+```swift
+private var cache: [String: [ClimateDataPoint]] = [:]
+
+func fetchClimateData(latitude: Double, longitude: Double) async throws -> [ClimateDataPoint] {
+    let cacheKey = "\(latitude),\(longitude)"
+    
+    if let cached = cache[cacheKey] {
+        return cached
+    }
+    
+    let dataPoints = // ... fetch data
+    cache[cacheKey] = dataPoints
+    return dataPoints
+}
+```
+
+## See Also
+
+- [ClimateDataPoint Model](/api/models/climate-data-point)
+- [ClimateArchiveResponse Model](/api/models/climate-archive-response)
+- [Open-Meteo Archive API Documentation](https://open-meteo.com/en/docs/historical-weather-api)

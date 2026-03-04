@@ -1,0 +1,287 @@
+---
+title: 'GeocodingService'
+description: 'Actor for geocoding city searches using Open-Meteo API'
+---
+
+## Overview
+
+`GeocodingService` is a Swift actor that provides geocoding functionality for city name searches. It uses the Open-Meteo Geocoding API to find cities by name and return their geographic coordinates and metadata.
+
+```swift
+actor GeocodingService
+```
+
+**Source**: `BreezeApp/Services/GeocodingService.swift:4`
+
+## Actor Isolation
+
+This service is implemented as an actor to ensure thread-safe access to its methods and properties. All async methods are actor-isolated and can be safely called from any context.
+
+## Shared Instance
+
+```swift
+static let shared = GeocodingService()
+```
+
+A singleton instance of the service that can be accessed throughout the application.
+
+## Methods
+
+### searchCities
+
+Search for cities by name and return matching results with geographic coordinates.
+
+```swift
+func searchCities(
+    query: String
+) async throws -> [City]
+```
+
+<ParamField path="query" type="String" required>
+  The city name or partial name to search for. Must be at least 2 characters long.
+</ParamField>
+
+**Returns**: `[City]` - An array of `City` objects containing:
+- City name
+- Country information
+- Latitude and longitude coordinates
+- Additional metadata (population, timezone, etc.)
+
+Returns an empty array if the query is less than 2 characters.
+
+**Throws**:
+- `URLError.badURL` - If the URL cannot be constructed
+- `URLError.badServerResponse` - If the server returns a non-200 status code
+- `DecodingError` - If the response cannot be decoded
+
+**Implementation Details**:
+
+The method constructs a URL with the following query parameters:
+- `name`: The search query string
+- `count`: Maximum number of results (set to 5)
+- `language`: Language for results (set to "en" for English)
+- `format`: Response format (set to "json")
+
+The minimum query length of 2 characters helps prevent unnecessary API calls for single-character searches.
+
+```swift
+// Early return for short queries
+guard query.count >= 2 else { return [] }
+```
+
+## Usage Example
+
+```swift
+import SwiftUI
+
+struct CitySearchView: View {
+    @State private var searchText = ""
+    @State private var cities: [City] = []
+    @State private var isLoading = false
+    @State private var errorMessage: String?
+    
+    var body: some View {
+        VStack {
+            TextField("Search cities", text: $searchText)
+                .textFieldStyle(.roundedBorder)
+                .padding()
+                .onChange(of: searchText) { newValue in
+                    Task {
+                        await searchCities(query: newValue)
+                    }
+                }
+            
+            if isLoading {
+                ProgressView("Searching...")
+            } else if let error = errorMessage {
+                Text("Error: \(error)")
+                    .foregroundColor(.red)
+            } else {
+                List(cities) { city in
+                    VStack(alignment: .leading) {
+                        Text(city.name)
+                            .font(.headline)
+                        Text("\(city.country) - Lat: \(city.latitude), Lon: \(city.longitude)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
+    }
+    
+    func searchCities(query: String) async {
+        guard query.count >= 2 else {
+            cities = []
+            return
+        }
+        
+        isLoading = true
+        errorMessage = nil
+        
+        do {
+            let service = GeocodingService.shared
+            cities = try await service.searchCities(query: query)
+        } catch {
+            errorMessage = error.localizedDescription
+            cities = []
+        }
+        
+        isLoading = false
+    }
+}
+```
+
+## Simple Usage
+
+```swift
+// Basic search
+let service = GeocodingService.shared
+
+do {
+    let cities = try await service.searchCities(query: "San Francisco")
+    
+    for city in cities {
+        print("\(city.name), \(city.country)")
+        print("Coordinates: \(city.latitude), \(city.longitude)")
+    }
+} catch {
+    print("Search failed: \(error)")
+}
+```
+
+## API Endpoint
+
+The service uses the Open-Meteo Geocoding API:
+
+```
+https://geocoding-api.open-meteo.com/v1/search
+```
+
+## Source Code
+
+```swift
+import Foundation
+
+/// Service for geocoding city searches using Open-Meteo API
+actor GeocodingService {
+    static let shared = GeocodingService()
+    
+    private let baseURL = "https://geocoding-api.open-meteo.com/v1/search"
+    
+    /// Search for cities by name
+    func searchCities(query: String) async throws -> [City] {
+        guard query.count >= 2 else { return [] }
+        
+        var components = URLComponents(string: baseURL)!
+        components.queryItems = [
+            URLQueryItem(name: "name", value: query),
+            URLQueryItem(name: "count", value: "5"),
+            URLQueryItem(name: "language", value: "en"),
+            URLQueryItem(name: "format", value: "json")
+        ]
+        
+        guard let url = components.url else {
+            throw URLError(.badURL)
+        }
+        
+        let (data, response) = try await URLSession.shared.data(from: url)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw URLError(.badServerResponse)
+        }
+        
+        let decoder = JSONDecoder()
+        let result = try decoder.decode(GeocodingResponse.self, from: data)
+        
+        return result.results ?? []
+    }
+}
+```
+
+## Performance Considerations
+
+### Query Debouncing
+
+When implementing search-as-you-type functionality, consider debouncing the search to avoid making excessive API calls:
+
+```swift
+import Combine
+
+class CitySearchViewModel: ObservableObject {
+    @Published var searchText = ""
+    @Published var cities: [City] = []
+    
+    private var cancellables = Set<AnyCancellable>()
+    private let service = GeocodingService.shared
+    
+    init() {
+        $searchText
+            .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
+            .removeDuplicates()
+            .sink { [weak self] query in
+                Task {
+                    await self?.search(query: query)
+                }
+            }
+            .store(in: &cancellables)
+    }
+    
+    func search(query: String) async {
+        do {
+            cities = try await service.searchCities(query: query)
+        } catch {
+            print("Search error: \(error)")
+            cities = []
+        }
+    }
+}
+```
+
+## Error Handling Best Practices
+
+```swift
+enum GeocodingError: LocalizedError {
+    case queryTooShort
+    case networkError(Error)
+    case noResults
+    
+    var errorDescription: String? {
+        switch self {
+        case .queryTooShort:
+            return "Please enter at least 2 characters to search"
+        case .networkError(let error):
+            return "Network error: \(error.localizedDescription)"
+        case .noResults:
+            return "No cities found matching your search"
+        }
+    }
+}
+
+func searchCitiesWithCustomError(query: String) async throws -> [City] {
+    guard query.count >= 2 else {
+        throw GeocodingError.queryTooShort
+    }
+    
+    let service = GeocodingService.shared
+    
+    do {
+        let cities = try await service.searchCities(query: query)
+        
+        guard !cities.isEmpty else {
+            throw GeocodingError.noResults
+        }
+        
+        return cities
+    } catch {
+        throw GeocodingError.networkError(error)
+    }
+}
+```
+
+## See Also
+
+- [City Model](/api/models/city)
+- [GeocodingResponse Model](/api/models/geocoding-response)
+- [Open-Meteo Geocoding API Documentation](https://open-meteo.com/en/docs/geocoding-api)

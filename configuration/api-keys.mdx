@@ -1,0 +1,191 @@
+---
+title: API Keys
+description: Configure API keys for Breeze features
+---
+
+## Overview
+
+Breeze uses multiple APIs to provide air quality, weather, and pollen data. Most APIs are **free and require no configuration**, but some features require API keys.
+
+## APIs Used
+
+### Free APIs (No Key Required)
+
+<CardGroup cols={2}>
+  <Card title="Open-Meteo Air Quality" icon="wind" href="https://open-meteo.com/en/docs/air-quality-api">
+    Real-time air quality data and pollutant levels
+  </Card>
+  <Card title="Open-Meteo Geocoding" icon="map-location-dot" href="https://open-meteo.com/en/docs/geocoding-api">
+    City search and location autocomplete
+  </Card>
+  <Card title="Open-Meteo Historical Weather" icon="chart-line" href="https://open-meteo.com/en/docs/historical-weather-api">
+    Climate trends and historical temperature data
+  </Card>
+</CardGroup>
+
+<Info>
+  These APIs work out of the box with no setup required.
+</Info>
+
+### Optional APIs (Key Required)
+
+<Card title="Google Pollen API" icon="seedling" href="https://developers.google.com/maps/documentation/pollen">
+  Pollen and allergen data for grass, trees, and weeds
+</Card>
+
+## Google Pollen API Setup
+
+The pollen feature requires a Google Pollen API key. Without this key, the app works normally but pollen data won't be available.
+
+### Getting an API Key
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select an existing one
+3. Enable the **Pollen API**
+4. Navigate to **APIs & Services → Credentials**
+5. Click **Create Credentials → API Key**
+6. Copy your API key
+
+<Warning>
+  Restrict your API key to the Pollen API and iOS app bundle identifier for security.
+</Warning>
+
+### Adding the Key in Xcode
+
+The app reads the API key from an environment variable at runtime:
+
+1. In Xcode, go to **Product → Scheme → Edit Scheme** (or press **Cmd + Shift + ,**)
+2. Select **Run** in the left sidebar
+3. Go to the **Arguments** tab
+4. Under **Environment Variables**, click the **+** button
+5. Add:
+   - **Name**: `GOOGLE_POLLEN_API_KEY`
+   - **Value**: `your_api_key_here`
+
+<Tip>
+  Environment variables are stored in your local Xcode scheme file and won't be committed to version control.
+</Tip>
+
+## How the App Uses API Keys
+
+### Pollen Service Implementation
+
+The app checks for the API key and handles its absence gracefully:
+
+```swift PollenService.swift
+actor PollenService {
+    static let shared = PollenService()
+    
+    // Backend proxy URL - production API
+    private let baseURL = "https://breeze.earth/api/pollen"
+    
+    func fetchPollen(latitude: Double, longitude: Double) async throws -> [PollenItem] {
+        let urlString = "\(baseURL)?lat=\(latitude)&lon=\(longitude)"
+        
+        guard let url = URL(string: urlString) else {
+            throw URLError(.badURL)
+        }
+        
+        let (data, response) = try await URLSession.shared.data(from: url)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw URLError(.badServerResponse)
+        }
+        
+        // Parse and return pollen data
+        let decoder = JSONDecoder()
+        let result = try decoder.decode(PollenResponse.self, from: data)
+        // ... process pollen items
+    }
+}
+```
+
+<Note>
+  Pollen requests are made through a backend proxy (`breeze.earth/api/pollen`), which handles the Google API authentication. This architecture keeps API keys secure and allows for rate limiting.
+</Note>
+
+### Dashboard Integration
+
+The dashboard fetches pollen data asynchronously and doesn't block other features:
+
+```swift DashboardViewModel.swift:132-143
+// Fetch pollen data (non-blocking)
+Task {
+    do {
+        let pollen = try await PollenService.shared.fetchPollen(
+            latitude: latitude,
+            longitude: longitude
+        )
+        self.pollenItems = pollen
+    } catch {
+        print("Pollen error: \(error)")
+    }
+}
+```
+
+If the pollen API fails (due to missing key or network issues), the app continues working normally with air quality and climate data.
+
+## What Works Without API Keys
+
+<CardGroup cols={2}>
+  <Card title="Air Quality" icon="check" color="#10b981">
+    US AQI index and all pollutant levels (PM2.5, PM10, NO₂, SO₂, O₃, CO)
+  </Card>
+  <Card title="Location Services" icon="check" color="#10b981">
+    Current location detection and city search
+  </Card>
+  <Card title="Climate Data" icon="check" color="#10b981">
+    Historical temperature trends and climate analysis
+  </Card>
+  <Card title="Pollen Data" icon="xmark" color="#ef4444">
+    Requires Google Pollen API key
+  </Card>
+</CardGroup>
+
+## Production Deployment
+
+For production apps distributed via the App Store:
+
+<Steps>
+  <Step title="Use a backend proxy">
+    Don't embed API keys directly in the app. Use a backend service to proxy requests (like `breeze.earth/api/pollen`).
+  </Step>
+  <Step title="Implement rate limiting">
+    Protect your API keys from abuse by implementing rate limiting on your backend.
+  </Step>
+  <Step title="Monitor usage">
+    Track API usage in Google Cloud Console to avoid unexpected charges.
+  </Step>
+  <Step title="Set up billing alerts">
+    Configure billing alerts in Google Cloud to be notified if usage exceeds thresholds.
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Pollen data not showing">
+    1. Verify the API key is correctly set in **Edit Scheme → Environment Variables**
+    2. Check that the key is named exactly `GOOGLE_POLLEN_API_KEY`
+    3. Ensure the Pollen API is enabled in Google Cloud Console
+    4. Check Xcode console for error messages
+  </Accordion>
+
+  <Accordion title="API key security concerns">
+    For production apps, **never** embed API keys in the source code. Use a backend proxy service to handle authentication. The environment variable approach is only suitable for development.
+  </Accordion>
+
+  <Accordion title="Rate limit exceeded">
+    If you hit Google's rate limits, requests will fail with a 429 error. Consider:
+    - Implementing caching to reduce API calls
+    - Using a backend service with rate limiting
+    - Upgrading your Google Cloud plan
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<Card title="Permissions" icon="shield-check" href="/configuration/permissions">
+  Learn about configuring location and other permissions
+</Card>

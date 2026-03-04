@@ -1,0 +1,165 @@
+---
+title: 'AQI Card'
+description: 'Main dashboard card displaying current Air Quality Index with visual progress ring and health tips'
+---
+
+## Overview
+
+The `AQICard` is the central UI component on the dashboard that displays the current Air Quality Index (AQI) value. It features an animated circular progress indicator, color-coded status messages, personalized health recommendations, and a share button.
+
+## Visual Display
+
+The card presents:
+- Animated circular progress ring showing AQI level (0-500 scale)
+- Large, bold AQI number in the center
+- Color-coded status indicator (Good, Moderate, Unhealthy, etc.)
+- Status description text
+- Health tips section with actionable recommendations
+- Share button for social sharing
+
+## Component Definition
+
+```swift
+struct AQICard: View {
+    @ObservedObject var viewModel: DashboardViewModel
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            // AQI Circle
+            ZStack {
+                // Background circle
+                Circle()
+                    .stroke(viewModel.aqiColor.opacity(0.2), lineWidth: 12)
+                    .frame(width: 160, height: 160)
+                
+                // Progress circle
+                Circle()
+                    .trim(from: 0, to: progressValue)
+                    .stroke(
+                        viewModel.aqiColor,
+                        style: StrokeStyle(lineWidth: 12, lineCap: .round)
+                    )
+                    .frame(width: 160, height: 160)
+                    .rotationEffect(.degrees(-90))
+                    .animation(.easeInOut(duration: 1.0), value: progressValue)
+                
+                // AQI Value
+                VStack(spacing: 4) {
+                    Text("\(viewModel.airQuality?.usAQI ?? 0)")
+                        .font(.system(size: 56, weight: .bold, design: .rounded))
+                        .foregroundColor(viewModel.aqiColor)
+                    
+                    Text("US AQI")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(.vertical, 8)
+        }
+        .padding(24)
+        .background(Color.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 24))
+    }
+}
+```
+
+## Props / Parameters
+
+<ParamField path="viewModel" type="DashboardViewModel" required>
+  Observable view model that provides:
+  - `airQuality`: Current air quality data including US AQI value
+  - `aqiColor`: Dynamic color based on AQI level (green, yellow, orange, red, purple)
+  - `aqiStatus`: Status object with text description and health tips
+  - `locationName`: Current location for share message
+</ParamField>
+
+## Key Features
+
+### Animated Progress Ring
+
+The circular progress indicator animates smoothly when AQI values change:
+
+```swift:4,113-117
+private var progressValue: CGFloat {
+    guard let aqi = viewModel.airQuality?.usAQI else { return 0 }
+    // Scale AQI 0-500 to 0-1
+    return min(CGFloat(aqi) / 500.0, 1.0)
+}
+```
+
+### Health Tips Section
+
+Displays personalized health recommendations based on current AQI level:
+
+```swift:59,63-91
+// Health Tips Section
+VStack(alignment: .leading, spacing: 12) {
+    HStack(spacing: 8) {
+        Image(systemName: "heart.fill")
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundColor(.pink)
+        
+        Text("What You Can Do")
+            .font(.subheadline)
+            .fontWeight(.semibold)
+    }
+    
+    VStack(spacing: 10) {
+        ForEach(Array(status.tips.enumerated()), id: \.offset) { index, tip in
+            HStack(alignment: .top, spacing: 10) {
+                Circle()
+                    .fill(viewModel.aqiColor.opacity(0.8))
+                    .frame(width: 6, height: 6)
+                    .padding(.top, 6)
+                
+                Text(tip)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+}
+```
+
+### Share Integration
+
+Built-in iOS ShareLink for sharing air quality reports:
+
+```swift:96-106
+ShareLink(
+    item: "Air Quality in \(viewModel.locationName): AQI \(viewModel.airQuality?.usAQI ?? 0) - \(viewModel.aqiStatus?.text ?? "Unknown")",
+    subject: Text("Air Quality Report"),
+    message: Text("Check out the air quality via Breeze!")
+) {
+    Label("Share", systemImage: "square.and.arrow.up")
+        .font(.subheadline)
+        .fontWeight(.medium)
+}
+.buttonStyle(.bordered)
+.tint(viewModel.aqiColor)
+```
+
+## Color Coding
+
+The component automatically adjusts colors based on AQI levels:
+- **Good (0-50)**: Green
+- **Moderate (51-100)**: Yellow
+- **Unhealthy for Sensitive Groups (101-150)**: Orange
+- **Unhealthy (151-200)**: Red
+- **Very Unhealthy (201-300)**: Purple
+- **Hazardous (301+)**: Maroon
+
+## Usage in App
+
+The AQI Card is displayed prominently on the main dashboard:
+
+```swift
+AQICard(viewModel: dashboardViewModel)
+    .padding()
+```
+
+It updates automatically when new air quality data is fetched from the API.
+
+## Source Location
+
+`BreezeApp/Views/Dashboard/AQICard.swift:3`

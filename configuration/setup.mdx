@@ -1,0 +1,150 @@
+---
+title: Initial Setup
+description: Set up your Xcode project to build and run Breeze
+---
+
+## Prerequisites
+
+Before you begin, ensure you have:
+
+- **Xcode 15.0+** installed
+- **iOS 16.0+** deployment target
+- **Swift 5.9+**
+- An Apple Developer account (for device testing)
+
+## Opening the Project
+
+1. Navigate to the project directory:
+
+```bash
+cd BreezeApp
+```
+
+2. Open the Xcode project:
+
+```bash
+open BreezeApp.xcodeproj
+```
+
+<Note>
+  The project uses a standard `.xcodeproj` file (not a workspace), so all dependencies are built-in.
+</Note>
+
+## Project Configuration
+
+### Bundle Identifier
+
+The bundle identifier is set in `Info.plist` using the build setting variable:
+
+```xml Info.plist
+<key>CFBundleIdentifier</key>
+<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+```
+
+To customize your bundle identifier:
+
+1. Select the **BreezeApp** project in the Project Navigator
+2. Select the **BreezeApp** target
+3. Go to the **General** tab
+4. Update the **Bundle Identifier** field (e.g., `com.yourcompany.breeze`)
+
+<Warning>
+  If you plan to distribute the app, use a unique bundle identifier that you control.
+</Warning>
+
+### Development Team
+
+For code signing and device deployment:
+
+1. In Xcode, select the **BreezeApp** target
+2. Go to **Signing & Capabilities**
+3. Check **Automatically manage signing**
+4. Select your **Team** from the dropdown
+
+<Info>
+  You'll need an Apple Developer account to run the app on a physical device. Simulator testing works without a team.
+</Info>
+
+### Display Name
+
+The app display name is configured in `Info.plist`:
+
+```xml Info.plist
+<key>CFBundleDisplayName</key>
+<string>Breeze</string>
+```
+
+This is the name that appears under the app icon on iOS devices.
+
+## Build Settings
+
+### Deployment Target
+
+Breeze requires **iOS 16.0** or later. This is configured in the project build settings:
+
+1. Select the **BreezeApp** target
+2. Go to **Build Settings**
+3. Search for "iOS Deployment Target"
+4. Verify it's set to **iOS 16.0**
+
+### Supported Orientations
+
+The app supports the following orientations (configured in `Info.plist`):
+
+**iPhone:**
+- Portrait
+- Landscape Left
+- Landscape Right
+
+**iPad:**
+- Portrait
+- Portrait Upside Down
+- Landscape Left
+- Landscape Right
+
+## Building and Running
+
+1. Select a simulator or connected device from the scheme menu
+2. Press **Cmd + R** or click the **Run** button
+3. Wait for the build to complete
+
+<Tip>
+  For the best simulator experience, use **iPhone 15** or newer.
+</Tip>
+
+### First Launch
+
+On first launch, the app will:
+
+1. Request location permissions (if using "Use My Location")
+2. Load the dashboard interface
+3. Wait for you to search for a city or use your location
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Build fails with signing errors">
+    Ensure you've selected a valid development team in **Signing & Capabilities**. For simulator builds, automatic signing should work without an Apple Developer account.
+  </Accordion>
+
+  <Accordion title="App crashes on launch">
+    - Clean the build folder: **Product → Clean Build Folder** (Cmd + Shift + K)
+    - Delete derived data: **Xcode → Settings → Locations → Derived Data** (click the arrow and delete the BreezeApp folder)
+    - Rebuild the project
+  </Accordion>
+
+  <Accordion title="Xcode version not supported">
+    Breeze requires Xcode 15.0 or later. Update Xcode from the Mac App Store or download from [developer.apple.com](https://developer.apple.com/download/).
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="API Keys" icon="key" href="/configuration/api-keys">
+    Configure optional API keys for enhanced features
+  </Card>
+  <Card title="Permissions" icon="shield-check" href="/configuration/permissions">
+    Understand and configure app permissions
+  </Card>
+</CardGroup>

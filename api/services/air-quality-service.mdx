@@ -1,0 +1,235 @@
+---
+title: 'AirQualityService'
+description: 'Actor for fetching air quality data from Open-Meteo API'
+---
+
+## Overview
+
+`AirQualityService` is a Swift actor that provides methods to fetch current air quality data from the Open-Meteo Air Quality API. It supports fetching data for single locations and batch fetching for multiple cities.
+
+```swift
+actor AirQualityService
+```
+
+**Source**: `BreezeApp/Services/AirQualityService.swift:4`
+
+## Actor Isolation
+
+This service is implemented as an actor to ensure thread-safe access to its methods and properties. All async methods are actor-isolated and can be safely called from any context.
+
+## Shared Instance
+
+```swift
+static let shared = AirQualityService()
+```
+
+A singleton instance of the service that can be accessed throughout the application.
+
+## Methods
+
+### fetchAirQuality
+
+Fetch current air quality data for a specific location.
+
+```swift
+func fetchAirQuality(
+    latitude: Double, 
+    longitude: Double
+) async throws -> AirQuality
+```
+
+<ParamField path="latitude" type="Double" required>
+  The latitude of the location to fetch air quality data for
+</ParamField>
+
+<ParamField path="longitude" type="Double" required>
+  The longitude of the location to fetch air quality data for
+</ParamField>
+
+**Returns**: `AirQuality` - An object containing current air quality metrics including:
+- US AQI (Air Quality Index)
+- PM10 and PM2.5 particulate matter
+- Carbon monoxide levels
+- Nitrogen dioxide levels
+- Sulphur dioxide levels
+- Ozone levels
+
+**Throws**:
+- `URLError.badURL` - If the URL cannot be constructed
+- `URLError.badServerResponse` - If the server returns a non-200 status code
+- `NSError` (domain: "AirQualityService", code: 1) - If no air quality data is available in the response
+- `DecodingError` - If the response cannot be decoded
+
+**Implementation Details**:
+
+The method constructs a URL with the following query parameters:
+- `latitude` and `longitude` for the location
+- `current` parameter requesting multiple pollutant measurements
+- `timezone` set to "auto" for automatic timezone detection
+
+```swift
+// Usage example
+let service = AirQualityService.shared
+do {
+    let airQuality = try await service.fetchAirQuality(
+        latitude: 37.7749,
+        longitude: -122.4194
+    )
+    print("AQI: \(airQuality.usAqi)")
+    print("PM2.5: \(airQuality.pm2_5)")
+} catch {
+    print("Failed to fetch air quality: \(error)")
+}
+```
+
+### fetchMultipleCities
+
+Fetch AQI data for multiple cities simultaneously, useful for ticker displays.
+
+```swift
+func fetchMultipleCities(
+    _ cities: [TopCity]
+) async -> [(city: TopCity, aqi: Int?)]
+```
+
+<ParamField path="cities" type="[TopCity]" required>
+  An array of `TopCity` objects containing city information with latitude and longitude coordinates
+</ParamField>
+
+**Returns**: `[(city: TopCity, aqi: Int?)]` - An array of tuples containing:
+- `city`: The original `TopCity` object
+- `aqi`: The US AQI value for that city, or `nil` if data couldn't be fetched
+
+**Error Handling**:
+
+This method does not throw errors. Instead, it returns `nil` AQI values for cities where data couldn't be fetched. Errors are logged to the console.
+
+**Implementation Details**:
+
+The method uses batch fetching by sending comma-separated latitude and longitude values in a single API request. This is more efficient than making individual requests for each city.
+
+```swift
+// API request format
+let lats = cities.map { String($0.lat) }.joined(separator: ",")
+let lons = cities.map { String($0.lon) }.joined(separator: ",")
+```
+
+The response is parsed to handle both array and single object responses from the API.
+
+```swift
+// Usage example
+let cities = [
+    TopCity(name: "San Francisco", lat: 37.7749, lon: -122.4194),
+    TopCity(name: "Los Angeles", lat: 34.0522, lon: -118.2437),
+    TopCity(name: "New York", lat: 40.7128, lon: -74.0060)
+]
+
+let service = AirQualityService.shared
+let results = await service.fetchMultipleCities(cities)
+
+for (city, aqi) in results {
+    if let aqi = aqi {
+        print("\(city.name): AQI \(aqi)")
+    } else {
+        print("\(city.name): No data available")
+    }
+}
+```
+
+## API Endpoint
+
+The service uses the Open-Meteo Air Quality API:
+
+```
+https://air-quality-api.open-meteo.com/v1/air-quality
+```
+
+## Source Code
+
+```swift
+import Foundation
+
+/// Service for fetching air quality data from Open-Meteo API
+actor AirQualityService {
+    static let shared = AirQualityService()
+    
+    private let baseURL = "https://air-quality-api.open-meteo.com/v1/air-quality"
+    
+    /// Fetch current air quality for a location
+    func fetchAirQuality(latitude: Double, longitude: Double) async throws -> AirQuality {
+        var components = URLComponents(string: baseURL)!
+        components.queryItems = [
+            URLQueryItem(name: "latitude", value: String(latitude)),
+            URLQueryItem(name: "longitude", value: String(longitude)),
+            URLQueryItem(name: "current", value: "us_aqi,pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone"),
+            URLQueryItem(name: "timezone", value: "auto")
+        ]
+        
+        guard let url = components.url else {
+            throw URLError(.badURL)
+        }
+        
+        let (data, response) = try await URLSession.shared.data(from: url)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw URLError(.badServerResponse)
+        }
+        
+        let decoder = JSONDecoder()
+        let result = try decoder.decode(AirQualityResponse.self, from: data)
+        
+        guard let airQuality = result.current else {
+            throw NSError(domain: "AirQualityService", code: 1, 
+                         userInfo: [NSLocalizedDescriptionKey: "No air quality data available"])
+        }
+        
+        return airQuality
+    }
+    
+    /// Fetch AQI for multiple cities (for ticker)
+    func fetchMultipleCities(_ cities: [TopCity]) async -> [(city: TopCity, aqi: Int?)] {
+        let lats = cities.map { String($0.lat) }.joined(separator: ",")
+        let lons = cities.map { String($0.lon) }.joined(separator: ",")
+        
+        var components = URLComponents(string: baseURL)!
+        components.queryItems = [
+            URLQueryItem(name: "latitude", value: lats),
+            URLQueryItem(name: "longitude", value: lons),
+            URLQueryItem(name: "current", value: "us_aqi")
+        ]
+        
+        guard let url = components.url else {
+            return cities.map { ($0, nil) }
+        }
+        
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            
+            // Parse the response - can be array or single object
+            if let json = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+                return zip(cities, json).map { city, data in
+                    let current = data["current"] as? [String: Any]
+                    let aqi = current?["us_aqi"] as? Int
+                    return (city, aqi)
+                }
+            } else if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let current = json["current"] as? [String: Any],
+                      let aqi = current["us_aqi"] as? Int,
+                      let firstCity = cities.first {
+                return [(firstCity, aqi)]
+            }
+        } catch {
+            print("Error fetching multiple cities: \(error)")
+        }
+        
+        return cities.map { ($0, nil) }
+    }
+}
+```
+
+## See Also
+
+- [AirQuality Model](/api/models/air-quality)
+- [TopCity Model](/api/models/top-city)
+- [Open-Meteo Air Quality API Documentation](https://open-meteo.com/en/docs/air-quality-api)

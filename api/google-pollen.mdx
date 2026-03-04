@@ -1,0 +1,289 @@
+---
+title: "Google Pollen API"
+description: "Detailed pollen forecasts with health recommendations via backend proxy"
+---
+
+## Overview
+
+Breeze integrates with the Google Pollen API to provide detailed pollen information including specific plant types, pollen levels, and personalized health recommendations. The API is accessed through a backend proxy to securely manage API credentials.
+
+## Base URL
+
+```
+https://breeze.earth/api/pollen
+```
+
+<Note>
+Breeze uses a backend proxy at `breeze.earth` rather than calling the Google Pollen API directly. This approach keeps the Google API key secure and allows for rate limiting and caching.
+</Note>
+
+## Endpoints Used
+
+### Get Pollen Data for Location
+
+Fetches current pollen information for specific coordinates.
+
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `lat` | Double | Latitude of the location |
+| `lon` | Double | Longitude of the location |
+
+**Example Request:**
+
+```
+GET https://breeze.earth/api/pollen?lat=37.7749&lon=-122.4194
+```
+
+## Response Format
+
+The API returns a comprehensive pollen forecast with two main data types:
+
+### 1. Pollen Type Information
+
+General pollen categories (Grass, Tree, Weed):
+
+```json
+{
+  "dailyInfo": [
+    {
+      "pollenTypeInfo": [
+        {
+          "code": "GRASS",
+          "displayName": "Grass",
+          "indexInfo": {
+            "value": 3,
+            "category": "Moderate",
+            "indexDescription": "Moderate pollen levels"
+          },
+          "healthRecommendations": [
+            "Consider reducing outdoor activities if symptoms occur",
+            "Keep windows closed during high pollen times"
+          ]
+        },
+        {
+          "code": "TREE",
+          "displayName": "Tree",
+          "indexInfo": {
+            "value": 4,
+            "category": "High"
+          },
+          "healthRecommendations": [
+            "Limit outdoor activities",
+            "Take allergy medication as prescribed"
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+### 2. Plant-Specific Information
+
+Detailed data for specific plant species:
+
+```json
+{
+  "dailyInfo": [
+    {
+      "plantInfo": [
+        {
+          "code": "OAK",
+          "displayName": "Oak",
+          "indexInfo": {
+            "value": 4,
+            "category": "High"
+          },
+          "plantDescription": {
+            "family": "Fagaceae",
+            "season": "Spring",
+            "specialColors": "Green to brown",
+            "picture": "https://example.com/oak.jpg"
+          },
+          "healthRecommendations": [
+            "Oak pollen can trigger severe allergic reactions",
+            "Consider staying indoors during peak hours"
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+## Response Models
+
+Breeze decodes the response into these Swift models:
+
+```swift
+struct PollenResponse: Codable {
+    let dailyInfo: [DailyPollenInfo]?
+}
+
+struct DailyPollenInfo: Codable {
+    let pollenTypeInfo: [PollenTypeInfo]?
+    let plantInfo: [PlantInfo]?
+}
+
+struct PollenTypeInfo: Codable {
+    let code: String
+    let displayName: String
+    let indexInfo: IndexInfo?
+    let healthRecommendations: [String]?
+}
+
+struct PlantInfo: Codable {
+    let code: String
+    let displayName: String
+    let indexInfo: IndexInfo?
+    let plantDescription: PlantDescription?
+    let healthRecommendations: [String]?
+}
+
+struct IndexInfo: Codable {
+    let value: Int?
+    let category: String?
+    let indexDescription: String?
+}
+
+struct PlantDescription: Codable {
+    let family: String?
+    let season: String?
+    let specialColors: String?
+    let crossReaction: String?
+    let picture: String?
+}
+```
+
+## Usage Example
+
+Here's how Breeze fetches pollen data:
+
+```swift
+func fetchPollen(latitude: Double, longitude: Double) async throws -> [PollenItem] {
+    let urlString = "\(baseURL)?lat=\(latitude)&lon=\(longitude)"
+    
+    guard let url = URL(string: urlString) else {
+        throw URLError(.badURL)
+    }
+    
+    let (data, response) = try await URLSession.shared.data(from: url)
+    
+    guard let httpResponse = response as? HTTPURLResponse,
+          httpResponse.statusCode == 200 else {
+        throw URLError(.badServerResponse)
+    }
+    
+    let decoder = JSONDecoder()
+    let result = try decoder.decode(PollenResponse.self, from: data)
+    
+    var items: [PollenItem] = []
+    
+    if let dailyInfo = result.dailyInfo?.first {
+        // Process pollen types (Grass, Tree, Weed)
+        if let pollenTypes = dailyInfo.pollenTypeInfo {
+            for type in pollenTypes {
+                items.append(PollenItem(
+                    id: type.code,
+                    name: type.displayName,
+                    value: type.indexInfo?.value ?? 0,
+                    category: type.indexInfo?.category ?? "Low",
+                    isPlant: false,
+                    imageUrl: nil,
+                    family: nil,
+                    season: nil,
+                    appearance: nil,
+                    healthRecommendations: type.healthRecommendations
+                ))
+            }
+        }
+        
+        // Process specific plants
+        if let plants = dailyInfo.plantInfo {
+            for plant in plants {
+                items.append(PollenItem(
+                    id: plant.code,
+                    name: plant.displayName,
+                    value: plant.indexInfo?.value ?? 0,
+                    category: plant.indexInfo?.category ?? "Low",
+                    isPlant: true,
+                    imageUrl: plant.plantDescription?.picture,
+                    family: plant.plantDescription?.family,
+                    season: plant.plantDescription?.season,
+                    appearance: plant.plantDescription?.specialColors,
+                    healthRecommendations: plant.healthRecommendations
+                ))
+            }
+        }
+    }
+    
+    return items
+}
+```
+
+See PollenService.swift:11
+
+## Pollen Level Scale
+
+Breeze interprets pollen index values on a 0-5 scale:
+
+| Value | Level | Description |
+|-------|-------|-------------|
+| 0 | None | No pollen detected |
+| 1 | Low | Minimal impact on allergies |
+| 2-3 | Moderate | May affect sensitive individuals |
+| 4 | High | Likely to affect most allergy sufferers |
+| 5+ | Very High | Severe impact expected |
+
+## Data Processing
+
+Breeze consolidates pollen data into a unified `PollenItem` model that distinguishes between:
+
+1. **General Pollen Types**: Grass, Tree, Weed (`isPlant: false`)
+2. **Specific Plants**: Oak, Birch, Ragweed, etc. (`isPlant: true`)
+
+Plant-specific items include additional details:
+- Botanical family
+- Peak season information
+- Visual appearance description
+- Plant images (when available)
+
+## Health Recommendations
+
+The API provides actionable health recommendations based on pollen levels:
+
+- Outdoor activity suggestions
+- Window management advice
+- Medication reminders
+- Air purifier usage recommendations
+- Peak hour avoidance strategies
+
+## Backend Proxy Architecture
+
+```
+iOS App → breeze.earth/api/pollen → Google Pollen API
+```
+
+**Benefits:**
+- Secure API key management
+- Request caching for improved performance
+- Rate limiting protection
+- Consistent error handling
+
+## Error Handling
+
+The service handles several error cases:
+
+- **Invalid coordinates**: Throws `URLError(.badURL)`
+- **Network issues**: Propagates URLSession errors
+- **Bad response**: Throws `URLError(.badServerResponse)`
+- **Missing data**: Returns empty array when no pollen info available
+
+## Reference
+
+- [Google Pollen API Documentation](https://developers.google.com/maps/documentation/pollen)
+- Service Implementation: `BreezeApp/Services/PollenService.swift`
+- Data Models: `BreezeApp/Models/PollenData.swift`
+- Backend Proxy: `https://breeze.earth/api/pollen`

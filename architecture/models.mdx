@@ -1,0 +1,456 @@
+---
+title: Models
+description: Core data models used throughout the Breeze iOS app
+---
+
+Breeze uses strongly-typed Swift structs and enums to represent air quality, pollen, climate data, and user preferences. All models conform to `Codable` for seamless API integration.
+
+## Air Quality Models
+
+### AirQuality
+
+The primary model for air quality data from the Open-Meteo API.
+
+<ResponseField name="usAQI" type="Int" required>
+  US Air Quality Index (0-500 scale)
+</ResponseField>
+
+<ResponseField name="pm25" type="Double" required>
+  Fine particulate matter ≤2.5 micrometers in µg/m³
+</ResponseField>
+
+<ResponseField name="pm10" type="Double" required>
+  Coarse particulate matter ≤10 micrometers in µg/m³
+</ResponseField>
+
+<ResponseField name="carbonMonoxide" type="Double" required>
+  Carbon monoxide concentration in µg/m³
+</ResponseField>
+
+<ResponseField name="nitrogenDioxide" type="Double" required>
+  Nitrogen dioxide concentration in µg/m³
+</ResponseField>
+
+<ResponseField name="sulphurDioxide" type="Double" required>
+  Sulfur dioxide concentration in µg/m³
+</ResponseField>
+
+<ResponseField name="ozone" type="Double" required>
+  Ground-level ozone concentration in µg/m³
+</ResponseField>
+
+```swift BreezeApp/Models/AirQuality.swift
+struct AirQuality: Codable {
+    let usAQI: Int
+    let pm25: Double
+    let pm10: Double
+    let carbonMonoxide: Double
+    let nitrogenDioxide: Double
+    let sulphurDioxide: Double
+    let ozone: Double
+    
+    enum CodingKeys: String, CodingKey {
+        case usAQI = "us_aqi"
+        case pm25 = "pm2_5"
+        case pm10
+        case carbonMonoxide = "carbon_monoxide"
+        case nitrogenDioxide = "nitrogen_dioxide"
+        case sulphurDioxide = "sulphur_dioxide"
+        case ozone
+    }
+}
+```
+
+### AQIStatus
+
+Provides human-readable status information based on AQI value.
+
+<ResponseField name="text" type="String" required>
+  Status label: "Excellent", "Good", "Moderate", "Unhealthy", etc.
+</ResponseField>
+
+<ResponseField name="emoji" type="String" required>
+  Visual emoji representation (✨, 😊, 😷, 🚨, ☠️)
+</ResponseField>
+
+<ResponseField name="description" type="String" required>
+  Friendly description of air quality conditions
+</ResponseField>
+
+<ResponseField name="color" type="String" required>
+  Color theme identifier (e.g., "aqiGood", "aqiUnhealthy")
+</ResponseField>
+
+<ResponseField name="tips" type="[String]" required>
+  Array of health tips and recommendations
+</ResponseField>
+
+```swift BreezeApp/Models/AirQuality.swift
+static func from(aqi: Int) -> AQIStatus {
+    switch aqi {
+    case 0...25:
+        return AQIStatus(
+            text: "Excellent",
+            emoji: "✨",
+            description: "Air quality is pristine! Perfect day for adventures.",
+            color: "aqiGood",
+            tips: [
+                "Air is exceptionally clean right now",
+                "No air quality concerns at this level"
+            ]
+        )
+    case 26...50:
+        return AQIStatus(
+            text: "Good",
+            emoji: "😊",
+            description: "Air quality is great. Breathe easy!",
+            color: "aqiGood",
+            tips: [
+                "Air quality meets health standards",
+                "Pollutant levels are low"
+            ]
+        )
+    // ... additional cases for Moderate, Unhealthy, Hazardous
+    }
+}
+```
+
+## Pollutant Models
+
+### PollutantType
+
+Enum representing individual air pollutants with their properties and thresholds.
+
+```swift BreezeApp/Models/Pollutant.swift
+enum PollutantType: String, CaseIterable, Identifiable {
+    case pm25 = "PM2.5"
+    case pm10 = "PM10"
+    case no2 = "NO₂"
+    case so2 = "SO₂"
+    case o3 = "O₃"
+    case co = "CO"
+    
+    var fullName: String { /* ... */ }
+    var description: String { /* ... */ }
+    var icon: String { /* SF Symbol name */ }
+    var goodLimit: Double { /* µg/m³ threshold */ }
+    var moderateLimit: Double { /* µg/m³ threshold */ }
+    var unit: String { return "µg/m³" }
+}
+```
+
+<ParamField path="pm25" type="PollutantType">
+  Fine Particulate Matter (PM2.5) - particles ≤2.5 micrometers
+  - Good limit: 12 µg/m³
+  - Moderate limit: 35.4 µg/m³
+  - Icon: `wind`
+</ParamField>
+
+<ParamField path="pm10" type="PollutantType">
+  Coarse Particulate Matter (PM10) - particles ≤10 micrometers
+  - Good limit: 54 µg/m³
+  - Moderate limit: 154 µg/m³
+  - Icon: `cloud`
+</ParamField>
+
+<ParamField path="no2" type="PollutantType">
+  Nitrogen Dioxide - from vehicle emissions
+  - Good limit: 53 µg/m³
+  - Moderate limit: 100 µg/m³
+  - Icon: `car.fill`
+</ParamField>
+
+<ParamField path="so2" type="PollutantType">
+  Sulfur Dioxide - from fossil fuel combustion
+  - Good limit: 35 µg/m³
+  - Moderate limit: 75 µg/m³
+  - Icon: `building.2.fill`
+</ParamField>
+
+<ParamField path="o3" type="PollutantType">
+  Ground-level Ozone - formed by sunlight and pollutants
+  - Good limit: 54 µg/m³
+  - Moderate limit: 70 µg/m³
+  - Icon: `sun.max.fill`
+</ParamField>
+
+<ParamField path="co" type="PollutantType">
+  Carbon Monoxide - from incomplete combustion
+  - Good limit: 4400 µg/m³
+  - Moderate limit: 9400 µg/m³
+  - Icon: `flame.fill`
+</ParamField>
+
+### PollutantReading
+
+Represents a single pollutant measurement with status calculation.
+
+```swift BreezeApp/Models/Pollutant.swift
+struct PollutantReading: Identifiable {
+    let id = UUID()
+    let type: PollutantType
+    let value: Double
+    
+    var status: PollutantStatus {
+        if value <= type.goodLimit {
+            return .good
+        } else if value <= type.moderateLimit {
+            return .moderate
+        } else {
+            return .unhealthy
+        }
+    }
+}
+```
+
+## Pollen Models
+
+### PollenItem
+
+Unified model for displaying pollen types and plant-specific data.
+
+<ResponseField name="id" type="String" required>
+  Unique identifier (plant code or pollen type code)
+</ResponseField>
+
+<ResponseField name="name" type="String" required>
+  Display name (e.g., "Grass", "Tree", "Oak", "Birch")
+</ResponseField>
+
+<ResponseField name="value" type="Int" required>
+  Pollen index value (0-5 scale)
+</ResponseField>
+
+<ResponseField name="category" type="String" required>
+  Category description from API (e.g., "Low", "Moderate", "High")
+</ResponseField>
+
+<ResponseField name="isPlant" type="Bool" required>
+  Whether this is a specific plant (true) or general pollen type (false)
+</ResponseField>
+
+<ResponseField name="imageUrl" type="String?">
+  URL to plant image (only for plant-specific items)
+</ResponseField>
+
+<ResponseField name="family" type="String?">
+  Botanical family name
+</ResponseField>
+
+<ResponseField name="season" type="String?">
+  Pollination season description
+</ResponseField>
+
+<ResponseField name="appearance" type="String?">
+  Visual characteristics of the plant
+</ResponseField>
+
+<ResponseField name="healthRecommendations" type="[String]?">
+  Health tips and recommendations
+</ResponseField>
+
+```swift BreezeApp/Models/PollenData.swift
+var level: PollenLevel {
+    switch value {
+    case 0: return .none
+    case 1: return .low
+    case 2...3: return .moderate
+    case 4: return .high
+    case 5...: return .veryHigh
+    default: return .low
+    }
+}
+```
+
+### PollenLevel
+
+Enum for pollen severity levels with color mapping.
+
+```swift BreezeApp/Models/PollenData.swift
+enum PollenLevel: String {
+    case none = "None"
+    case low = "Low"
+    case moderate = "Moderate"
+    case high = "High"
+    case veryHigh = "Very High"
+    
+    var colorName: String {
+        switch self {
+        case .none: return "levelNone"
+        case .low: return "levelLow"
+        case .moderate: return "levelModerate"
+        case .high: return "levelHigh"
+        case .veryHigh: return "levelExtreme"
+        }
+    }
+}
+```
+
+## Climate Models
+
+### ClimateDataPoint
+
+Historical temperature data for climate trend visualization.
+
+<ResponseField name="id" type="UUID" required>
+  Auto-generated unique identifier
+</ResponseField>
+
+<ResponseField name="year" type="Int" required>
+  Year of measurement (e.g., 1980, 1990, 2000, 2010, 2020)
+</ResponseField>
+
+<ResponseField name="temperature" type="Double" required>
+  Maximum temperature in Celsius
+</ResponseField>
+
+```swift BreezeApp/Models/ClimateData.swift
+struct ClimateDataPoint: Identifiable {
+    let id = UUID()
+    let year: Int
+    let temperature: Double
+}
+```
+
+## Location Models
+
+### City
+
+Model for city search results and location data.
+
+<ResponseField name="id" type="Int" required>
+  Unique city identifier from geocoding API
+</ResponseField>
+
+<ResponseField name="name" type="String" required>
+  City name
+</ResponseField>
+
+<ResponseField name="country" type="String?">
+  Country name
+</ResponseField>
+
+<ResponseField name="admin1" type="String?">
+  Administrative region (state, province, etc.)
+</ResponseField>
+
+<ResponseField name="latitude" type="Double" required>
+  Latitude coordinate
+</ResponseField>
+
+<ResponseField name="longitude" type="Double" required>
+  Longitude coordinate
+</ResponseField>
+
+```swift BreezeApp/Models/City.swift
+var displayName: String {
+    var components = [name]
+    if let admin1 = admin1, !admin1.isEmpty {
+        components.append(admin1)
+    }
+    if let country = country, !country.isEmpty {
+        components.append(country)
+    }
+    return components.joined(separator: ", ")
+}
+
+var coordinate: CLLocationCoordinate2D {
+    CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+}
+```
+
+### TopCity
+
+Predefined cities for the ticker display on the landing page.
+
+```swift BreezeApp/Models/City.swift
+struct TopCity {
+    let name: String
+    let country: String
+    let lat: Double
+    let lon: Double
+    
+    static let all: [TopCity] = [
+        TopCity(name: "New York", country: "USA", lat: 40.7128, lon: -74.0060),
+        TopCity(name: "London", country: "UK", lat: 51.5074, lon: -0.1278),
+        TopCity(name: "Tokyo", country: "Japan", lat: 35.6762, lon: 139.6503),
+        // ... 7 more cities
+    ]
+}
+```
+
+## User Preference Models
+
+### AppearanceMode
+
+Enum for theme selection (light, dark, system).
+
+<ResponseField name="system" type="AppearanceMode">
+  Follow system appearance settings (default)
+</ResponseField>
+
+<ResponseField name="light" type="AppearanceMode">
+  Always use light mode
+</ResponseField>
+
+<ResponseField name="dark" type="AppearanceMode">
+  Always use dark mode
+</ResponseField>
+
+```swift BreezeApp/Models/AppearanceMode.swift
+enum AppearanceMode: Int, CaseIterable, Identifiable {
+    case system = 0
+    case light = 1
+    case dark = 2
+    
+    var displayName: String {
+        switch self {
+        case .system: return "System"
+        case .light: return "Light"
+        case .dark: return "Dark"
+        }
+    }
+    
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
+}
+```
+
+## API Response Wrappers
+
+### AirQualityResponse
+
+```swift
+struct AirQualityResponse: Codable {
+    let current: AirQuality?
+}
+```
+
+### GeocodingResponse
+
+```swift
+struct GeocodingResponse: Codable {
+    let results: [City]?
+}
+```
+
+### PollenResponse
+
+```swift
+struct PollenResponse: Codable {
+    let dailyInfo: [DailyPollenInfo]?
+}
+```
+
+### ClimateArchiveResponse
+
+```swift
+struct ClimateArchiveResponse: Codable {
+    let daily: ClimateDaily?
+}
+```

@@ -1,0 +1,185 @@
+---
+title: Installation
+description: Step-by-step guide to install and run Breeze iOS app
+---
+
+## Quick Start
+
+Get Breeze up and running in just a few steps:
+
+<Steps>
+  <Step title="Open the project in Xcode">
+    Navigate to the BreezeApp directory and open the Xcode project:
+    
+    ```bash
+    cd BreezeApp
+    open BreezeApp.xcodeproj
+    ```
+    
+    <Note>
+    Make sure you have Xcode 15.0 or later installed before proceeding.
+    </Note>
+  </Step>
+
+  <Step title="Configure API Keys (Optional)">
+    For pollen and allergy data, add your Google Pollen API key:
+    
+    1. In Xcode, go to **Product → Scheme → Edit Scheme**
+    2. Select **Run** from the left sidebar
+    3. Go to the **Arguments** tab
+    4. Under **Environment Variables**, click the **+** button
+    5. Add: `GOOGLE_POLLEN_API_KEY` with your API key value
+    
+    <Warning>
+    The app will work without this key, but pollen data will not be available. All other features (air quality, pollutants, climate) will function normally.
+    </Warning>
+  </Step>
+
+  <Step title="Select your target device">
+    Choose a simulator or physical device:
+    
+    - For simulator: Select **iPhone 15** or later (recommended)
+    - For physical device: Connect your iPhone via USB and select it from the device menu
+    
+    <Tip>
+    Testing on a physical device gives you access to real location services for the "Use My Location" feature.
+    </Tip>
+  </Step>
+
+  <Step title="Build and run">
+    Press `Cmd + R` or click the **Play** button in Xcode to build and run the app.
+    
+    The app will:
+    1. Compile the Swift source files
+    2. Launch on your selected device
+    3. Display the landing screen with search and location options
+  </Step>
+</Steps>
+
+## Project Structure
+
+Once opened in Xcode, you'll see the following structure:
+
+```
+BreezeApp/
+├── App/
+│   ├── BreezeApp.swift          # App entry point with @main
+│   └── ContentView.swift         # Main navigation and view routing
+├── Models/
+│   ├── AirQuality.swift          # Air quality data structures
+│   ├── Pollutant.swift           # Pollutant types and thresholds
+│   ├── PollenData.swift          # Pollen data models
+│   ├── ClimateData.swift         # Historical climate data
+│   ├── City.swift                # City search results
+│   └── AppearanceMode.swift      # Dark mode preferences
+├── Services/
+│   ├── AirQualityService.swift   # Open-Meteo air quality API
+│   ├── GeocodingService.swift    # City search and geocoding
+│   ├── PollenService.swift       # Google Pollen API integration
+│   └── ClimateService.swift      # Historical weather data
+├── ViewModels/
+│   └── DashboardViewModel.swift  # Main state management
+├── Views/
+│   ├── Dashboard/
+│   │   ├── DashboardView.swift
+│   │   ├── AQICard.swift
+│   │   └── PollutantsGrid.swift
+│   ├── Search/
+│   │   └── SearchView.swift
+│   ├── Environmental/
+│   │   ├── PollenView.swift
+│   │   └── ClimateChartView.swift
+│   └── Components/
+│       ├── LoadingView.swift
+│       ├── HealthTipsView.swift
+│       ├── SettingsView.swift
+│       └── AnimatedText.swift
+├── Extensions/
+│   └── Color+Theme.swift         # Color theme extensions
+└── Resources/
+    └── Assets.xcassets           # App icons and image assets
+```
+
+## Xcode Configuration
+
+### Development Team Setup
+
+To run on a physical device, you'll need to configure your development team:
+
+1. Select the **BreezeApp** project in the navigator
+2. Go to **Signing & Capabilities**
+3. Select your **Team** from the dropdown
+4. Xcode will automatically manage your signing certificate
+
+### Bundle Identifier
+
+The default bundle identifier is:
+
+```
+com.breeze.airquality
+```
+
+You can change this in **Project Settings → General → Identity → Bundle Identifier**.
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Build fails with signing errors">
+    Make sure you've selected a valid development team in **Signing & Capabilities**. If you're using a free Apple Developer account, you may need to change the bundle identifier to something unique.
+  </Accordion>
+
+  <Accordion title="App crashes on launch">
+    Verify that you're using iOS 16.0 or later on your device or simulator. Check the deployment target in Xcode project settings.
+  </Accordion>
+
+  <Accordion title="Location services not working">
+    The app requests location permission with the description: "Breeze needs your location to show air quality data for your area." Make sure you've granted location permission when prompted. You can check this in Settings → Privacy → Location Services.
+  </Accordion>
+
+  <Accordion title="Pollen data not showing">
+    Pollen data requires a Google Pollen API key configured as an environment variable. If you haven't set this up, pollen data will not be available. All other features will work normally.
+  </Accordion>
+</AccordionGroup>
+
+## Running from Command Line
+
+You can also build and run Breeze using xcodebuild:
+
+<CodeGroup>
+
+```bash Build for Simulator
+xcodebuild -project BreezeApp.xcodeproj \
+  -scheme BreezeApp \
+  -sdk iphonesimulator \
+  -destination 'platform=iOS Simulator,name=iPhone 15' \
+  build
+```
+
+```bash Run Tests
+xcodebuild test -project BreezeApp.xcodeproj \
+  -scheme BreezeApp \
+  -destination 'platform=iOS Simulator,name=iPhone 15'
+```
+
+```bash Build for Device
+xcodebuild -project BreezeApp.xcodeproj \
+  -scheme BreezeApp \
+  -sdk iphoneos \
+  -configuration Release \
+  build
+```
+
+</CodeGroup>
+
+## Next Steps
+
+Now that you have Breeze installed, explore these topics:
+
+<CardGroup cols={2}>
+  <Card title="Understanding the Architecture" icon="sitemap" href="/introduction#architecture-overview">
+    Learn about the app's structure and components
+  </Card>
+  <Card title="API Integration" icon="plug" href="/introduction#api-integration">
+    Understand how Breeze connects to external APIs
+  </Card>
+</CardGroup>

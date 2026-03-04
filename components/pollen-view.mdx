@@ -1,0 +1,339 @@
+---
+title: 'Pollen View'
+description: 'Allergy tracker displaying pollen levels in a grid layout with detailed plant information'
+---
+
+## Overview
+
+The `PollenView` component displays pollen and allergen information in a visually appealing grid format. It shows pollen levels for different types (grass, tree, weed) and specific plants, with detailed sheets featuring plant images, health recommendations, and seasonal information.
+
+## Visual Display
+
+The component presents:
+- Header with "Allergy Tracker" title and Google attribution
+- 2-column grid of pollen item cards
+- Each card shows pollen name, level value, progress bar, and status
+- Tappable cards that open detailed information sheets
+- Empty state when no pollen data is available
+
+## Component Definition
+
+```swift
+struct PollenView: View {
+    let items: [PollenItem]
+    @State private var selectedPollen: PollenItem?
+    @State private var detentSelection: PresentationDetent = .large
+    
+    private let columns = [
+        GridItem(.flexible()),
+        GridItem(.flexible())
+    ]
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "leaf.fill")
+                    .foregroundColor(.green)
+                Text("Allergy Tracker")
+                    .font(.headline)
+                
+                Spacer()
+                
+                Text("Powered by Google")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 4)
+            
+            LazyVGrid(columns: columns, spacing: 8) {
+                ForEach(items) { item in
+                    PollenItemCard(item: item)
+                        .onTapGesture {
+                            selectedPollen = item
+                            detentSelection = .large
+                        }
+                }
+            }
+        }
+        .sheet(item: $selectedPollen) { pollen in
+            PollenDetailSheet(pollen: pollen)
+                .presentationDetents([.large, .medium], selection: $detentSelection)
+                .presentationDragIndicator(.visible)
+        }
+    }
+}
+```
+
+## Props / Parameters
+
+<ParamField path="items" type="[PollenItem]" required>
+  Array of pollen items to display. Each `PollenItem` contains:
+  - `id`: Unique identifier
+  - `name`: Display name (e.g., "Grass", "Ragweed")
+  - `value`: Pollen level (0-5 scale)
+  - `category`: Status category (None, Low, Moderate, High, Very High)
+  - `isPlant`: Whether this is a specific plant or general category
+  - `imageUrl`: Optional plant image URL
+  - `family`: Plant family information
+  - `season`: Peak pollen season
+  - `appearance`: Plant appearance description
+  - `healthRecommendations`: Array of health tips
+</ParamField>
+
+## Pollen Item Card
+
+Each card in the grid displays:
+
+```swift:65-112
+struct PollenItemCard: View {
+    let item: PollenItem
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(item.name)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .lineLimit(1)
+                
+                Spacer()
+                
+                HStack(spacing: 4) {
+                    Text("\(item.value)")
+                        .font(.title3)
+                        .fontWeight(.bold)
+                        .foregroundColor(item.level.color)
+                    
+                    Image(systemName: "info.circle")
+                        .font(.caption)
+                        .foregroundColor(.accentColor)
+                }
+            }
+            
+            // Progress bar
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.secondary.opacity(0.2))
+                        .frame(height: 6)
+                    
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(item.level.color)
+                        .frame(width: geometry.size.width * CGFloat(item.value) / 5.0, height: 6)
+                }
+            }
+            .frame(height: 6)
+            
+            Text(item.level.rawValue)
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .padding(10)
+        .background(Color.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}
+```
+
+## Detail Sheet Features
+
+The pollen detail sheet provides comprehensive information:
+
+### Hero Section
+```swift:122-145
+VStack(spacing: 12) {
+    // Icon
+    ZStack {
+        Circle()
+            .fill(pollen.level.color.opacity(0.15))
+            .frame(width: 70, height: 70)
+        
+        Image(systemName: "leaf.fill")
+            .font(.system(size: 28, weight: .medium))
+            .foregroundColor(pollen.level.color)
+    }
+    
+    // Name
+    VStack(spacing: 4) {
+        Text(pollen.name)
+            .font(.title2)
+            .fontWeight(.bold)
+        
+        Text(pollen.isPlant ? "Plant Pollen" : "Pollen Type")
+            .font(.subheadline)
+            .foregroundColor(.secondary)
+    }
+}
+```
+
+### Current Level Display
+```swift:147-172
+VStack(spacing: 8) {
+    HStack(alignment: .firstTextBaseline, spacing: 4) {
+        Text("\(pollen.value)")
+            .font(.system(size: 44, weight: .bold, design: .rounded))
+            .foregroundColor(pollen.level.color)
+        
+        Text("/ 5")
+            .font(.title3)
+            .foregroundColor(.secondary)
+    }
+    
+    // Status badge
+    Text(pollen.level.rawValue)
+        .font(.caption)
+        .fontWeight(.semibold)
+        .foregroundColor(.white)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
+        .background(pollen.level.color)
+        .clipShape(Capsule())
+}
+```
+
+### Plant Image
+
+For plant-specific entries, displays AsyncImage:
+
+```swift:174-197
+if let imageUrl = pollen.imageUrl, let url = URL(string: imageUrl) {
+    AsyncImage(url: url) { phase in
+        switch phase {
+        case .empty:
+            ProgressView()
+                .frame(maxWidth: .infinity)
+                .frame(height: 260)
+        case .success(let image):
+            image
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(maxWidth: .infinity)
+                .frame(height: 260)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+        case .failure:
+            EmptyView()
+        @unknown default:
+            EmptyView()
+        }
+    }
+}
+```
+
+### Plant Information
+
+Displays botanical details when available:
+
+```swift:200-244
+if pollen.family != nil || pollen.season != nil || pollen.appearance != nil {
+    VStack(alignment: .leading, spacing: 12) {
+        Text("About this Plant")
+            .font(.headline)
+        
+        VStack(alignment: .leading, spacing: 12) {
+            if let family = pollen.family {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Family")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.secondary)
+                    Text(family)
+                        .font(.subheadline)
+                }
+            }
+            
+            if let season = pollen.season {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Season")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.secondary)
+                    Text(season)
+                        .font(.subheadline)
+                }
+            }
+        }
+    }
+}
+```
+
+## Pollen Index Scale
+
+The detail sheet includes a comprehensive scale:
+
+- **None**: 0
+- **Low**: 1
+- **Moderate**: 2-3
+- **High**: 4
+- **Very High**: 5
+
+```swift:342-368
+struct PollenScaleRow: View {
+    let level: String
+    let range: String
+    let color: Color
+    let isActive: Bool
+    
+    var body: some View {
+        HStack {
+            Circle()
+                .fill(color)
+                .frame(width: 10, height: 10)
+            
+            Text(level)
+                .font(.subheadline)
+            
+            Spacer()
+            
+            Text(range)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .background(isActive ? color.opacity(0.1) : Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+```
+
+## Empty State
+
+When no pollen data is available:
+
+```swift:29-45
+if items.isEmpty {
+    HStack {
+        Spacer()
+        VStack(spacing: 8) {
+            Image(systemName: "leaf.circle")
+                .font(.largeTitle)
+                .foregroundColor(.secondary)
+            Text("No pollen data available")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+        }
+        .padding(.vertical, 24)
+        Spacer()
+    }
+    .background(Color.cardBackground)
+    .clipShape(RoundedRectangle(cornerRadius: 16))
+}
+```
+
+## Usage in App
+
+```swift
+PollenView(items: [
+    PollenItem(id: "GRASS", name: "Grass", value: 3, category: "Moderate", isPlant: false),
+    PollenItem(id: "TREE", name: "Tree", value: 2, category: "Low", isPlant: false),
+    PollenItem(id: "RAGWEED", name: "Ragweed", value: 4, category: "High", isPlant: true)
+])
+```
+
+## Data Source
+
+Pollen data is powered by Google's Pollen API, as indicated in the header attribution.
+
+## Source Location
+
+`BreezeApp/Views/Environmental/PollenView.swift:3`

@@ -1,0 +1,475 @@
+---
+title: 'Location Search'
+description: 'Search and select cities worldwide with real-time geocoding and location services'
+icon: 'magnifying-glass-location'
+---
+
+## Overview
+
+The Location Search feature allows users to find and select any city worldwide to view its air quality data. It includes real-time search with autocomplete, current location detection via GPS, and a curated list of popular cities.
+
+## Implementation
+
+### SearchView Component
+
+The search interface is built as a modal sheet with a navigation stack:
+
+```swift SearchView.swift
+import SwiftUI
+
+struct SearchView: View {
+    @ObservedObject var viewModel: DashboardViewModel
+    @Environment(\.dismiss) private var dismiss
+    @FocusState private var isSearchFocused: Bool
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                // Search bar
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.secondary)
+                    
+                    TextField("Search for a city", text: $viewModel.searchQuery)
+                        .focused($isSearchFocused)
+                        .textFieldStyle(.plain)
+                        .autocorrectionDisabled()
+                        .onChange(of: viewModel.searchQuery) { _, newValue in
+                            viewModel.searchCities(newValue)
+                        }
+                    
+                    if !viewModel.searchQuery.isEmpty {
+                        Button {
+                            viewModel.searchQuery = ""
+                            viewModel.searchResults = []
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+                .padding(12)
+                .background(Color.searchBarBackground)
+                .clipShape(Capsule())
+                .padding()
+                
+                // Use current location button
+                Button {
+                    dismiss()
+                    viewModel.requestLocation()
+                } label: {
+                    HStack {
+                        Image(systemName: "location.fill")
+                            .foregroundColor(.accentColor)
+                        
+                        Text("Use Current Location")
+                            .fontWeight(.medium)
+                        
+                        Spacer()
+                        
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding()
+                    .background(Color.cardBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal)
+                
+                // Search results or popular cities
+                if !viewModel.searchResults.isEmpty {
+                    List(viewModel.searchResults) { city in
+                        Button {
+                            viewModel.selectCity(city)
+                            dismiss()
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(city.name)
+                                    .font(.headline)
+                                
+                                Text(city.displayName)
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                    .listStyle(.plain)
+                }
+            }
+            .navigationTitle("Search")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .onAppear {
+            isSearchFocused = true
+        }
+    }
+}
+```
+
+## Features
+
+### 1. Real-Time Search
+
+The search implements debounced autocomplete to avoid excessive API calls:
+
+```swift DashboardViewModel.swift
+func searchCities(_ query: String) {
+    searchTask?.cancel()
+    
+    guard query.count >= 2 else {
+        searchResults = []
+        return
+    }
+    
+    searchTask = Task {
+        do {
+            try await Task.sleep(nanoseconds: 300_000_000) // 300ms debounce
+            let results = try await GeocodingService.shared.searchCities(query: query)
+            if !Task.isCancelled {
+                self.searchResults = results
+            }
+        } catch {
+            if !Task.isCancelled {
+                print("Search error: \(error)")
+            }
+        }
+    }
+}
+```
+
+<Note>
+**Debouncing**: The search waits 300ms after the user stops typing before making an API request. This reduces server load and provides a smoother user experience.
+</Note>
+
+### 2. Current Location
+
+The "Use Current Location" button triggers GPS location detection:
+
+```swift DashboardViewModel.swift
+func requestLocation() {
+    isLoading = true
+    errorMessage = nil
+    
+    switch locationManager.authorizationStatus {
+    case .notDetermined:
+        locationManager.requestWhenInUseAuthorization()
+    case .authorizedWhenInUse, .authorizedAlways:
+        locationManager.requestLocation()
+    case .denied, .restricted:
+        errorMessage = "Location access denied. Please enable in Settings."
+        isLoading = false
+    @unknown default:
+        errorMessage = "Unknown location authorization status."
+        isLoading = false
+    }
+}
+```
+
+#### Location Manager Delegate
+
+The ViewModel conforms to `CLLocationManagerDelegate` to handle location updates:
+
+```swift DashboardViewModel.swift
+extension DashboardViewModel: CLLocationManagerDelegate {
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let location = locations.first else { return }
+        
+        locationName = "Your Location"
+        
+        // Reverse geocode to get city name
+        CLGeocoder().reverseGeocodeLocation(location) { [weak self] placemarks, _ in
+            if let placemark = placemarks?.first {
+                var components: [String] = []
+                if let city = placemark.locality {
+                    components.append(city)
+                }
+                if let country = placemark.country {
+                    components.append(country)
+                }
+                if !components.isEmpty {
+                    self?.locationName = components.joined(separator: ", ")
+                }
+            }
+        }
+        
+        Task {
+            await fetchAllData(
+                latitude: location.coordinate.latitude,
+                longitude: location.coordinate.longitude
+            )
+        }
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        errorMessage = "Unable to get your location."
+        isLoading = false
+    }
+}
+```
+
+### 3. Popular Cities
+
+When no search is active, a list of popular cities is displayed:
+
+```swift SearchView.swift
+VStack(alignment: .leading, spacing: 12) {
+    Text("Popular Cities")
+        .font(.headline)
+        .padding(.horizontal)
+        .padding(.top, 24)
+    
+    ScrollView {
+        LazyVStack(spacing: 0) {
+            ForEach(TopCity.all.prefix(10), id: \.name) { city in
+                Button {
+                    viewModel.locationName = "\(city.name), \(city.country)"
+                    dismiss()
+                    Task {
+                        await viewModel.fetchAllData(latitude: city.lat, longitude: city.lon)
+                    }
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading) {
+                            Text(city.name)
+                                .font(.body)
+                            Text(city.country)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding()
+                }
+                .buttonStyle(.plain)
+                
+                Divider()
+                    .padding(.leading)
+            }
+        }
+    }
+}
+```
+
+## City Model
+
+Cities are represented with comprehensive location data:
+
+```swift City.swift
+import Foundation
+import CoreLocation
+
+struct City: Identifiable, Codable {
+    let id: Int
+    let name: String
+    let country: String?
+    let admin1: String?        // State/Province
+    let latitude: Double
+    let longitude: Double
+    
+    var displayName: String {
+        var components = [name]
+        if let admin1 = admin1, !admin1.isEmpty {
+            components.append(admin1)
+        }
+        if let country = country, !country.isEmpty {
+            components.append(country)
+        }
+        return components.joined(separator: ", ")
+    }
+    
+    var coordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+}
+```
+
+### Display Name Format
+
+The `displayName` property creates a hierarchical location string:
+- **With admin1**: "Los Angeles, California, USA"
+- **Without admin1**: "Paris, France"
+
+## Top Cities List
+
+A curated list of major cities worldwide:
+
+```swift City.swift
+struct TopCity {
+    let name: String
+    let country: String
+    let lat: Double
+    let lon: Double
+    
+    static let all: [TopCity] = [
+        TopCity(name: "New York", country: "USA", lat: 40.7128, lon: -74.0060),
+        TopCity(name: "Los Angeles", country: "USA", lat: 34.0522, lon: -118.2437),
+        TopCity(name: "Chicago", country: "USA", lat: 41.8781, lon: -87.6298),
+        TopCity(name: "London", country: "UK", lat: 51.5074, lon: -0.1278),
+        TopCity(name: "Paris", country: "France", lat: 48.8566, lon: 2.3522),
+        TopCity(name: "Tokyo", country: "Japan", lat: 35.6762, lon: 139.6503),
+        TopCity(name: "Berlin", country: "Germany", lat: 52.5200, lon: 13.4050),
+        TopCity(name: "Toronto", country: "Canada", lat: 43.6532, lon: -79.3832),
+        TopCity(name: "Sydney", country: "Australia", lat: -33.8688, lon: 151.2093),
+        TopCity(name: "Dubai", country: "UAE", lat: 25.2048, lon: 55.2708)
+    ]
+}
+```
+
+## Geocoding Service
+
+City search is powered by the Open-Meteo Geocoding API via `GeocodingService.swift`:
+
+```swift GeocodingService.swift
+actor GeocodingService {
+    static let shared = GeocodingService()
+    
+    private let baseURL = "https://geocoding-api.open-meteo.com/v1/search"
+    
+    func searchCities(query: String) async throws -> [City] {
+        var components = URLComponents(string: baseURL)!
+        components.queryItems = [
+            URLQueryItem(name: "name", value: query),
+            URLQueryItem(name: "count", value: "10"),
+            URLQueryItem(name: "language", value: "en"),
+            URLQueryItem(name: "format", value: "json")
+        ]
+        
+        guard let url = components.url else {
+            throw URLError(.badURL)
+        }
+        
+        let (data, _) = try await URLSession.shared.data(from: url)
+        let response = try JSONDecoder().decode(GeocodingResponse.self, from: data)
+        
+        return response.results ?? []
+    }
+}
+```
+
+### API Response Format
+
+```swift City.swift
+struct GeocodingResponse: Codable {
+    let results: [City]?
+}
+```
+
+## User Experience Features
+
+### Auto-Focus
+
+The search field automatically gains focus when the sheet opens:
+
+```swift
+.onAppear {
+    isSearchFocused = true
+}
+```
+
+### Clear Button
+
+The search field includes a clear button that appears when text is entered:
+
+```swift
+if !viewModel.searchQuery.isEmpty {
+    Button {
+        viewModel.searchQuery = ""
+        viewModel.searchResults = []
+    } label: {
+        Image(systemName: "xmark.circle.fill")
+            .foregroundColor(.secondary)
+    }
+}
+```
+
+### Search Validation
+
+Search only triggers when at least 2 characters are entered:
+
+```swift
+guard query.count >= 2 else {
+    searchResults = []
+    return
+}
+```
+
+Display states:
+- **Empty query**: Shows popular cities
+- **Query < 2 chars**: Shows popular cities  
+- **Query >= 2 chars, no results**: Shows "No results found"
+- **Query >= 2 chars, has results**: Shows search results list
+
+## City Selection Flow
+
+1. User taps a city (from search results or popular cities)
+2. `viewModel.selectCity(city)` is called
+3. Location name is updated
+4. Search state is cleared
+5. Modal is dismissed
+6. Data is fetched for the new location
+
+```swift DashboardViewModel.swift
+func selectCity(_ city: City) {
+    locationName = city.displayName
+    searchResults = []
+    searchQuery = ""
+    
+    Task {
+        await fetchAllData(latitude: city.latitude, longitude: city.longitude)
+    }
+}
+```
+
+## Location Permissions
+
+The app handles various location permission states:
+
+<Steps>
+  <Step title="Not Determined">
+    Request permission from the user
+    
+    ```swift
+    locationManager.requestWhenInUseAuthorization()
+    ```
+  </Step>
+  
+  <Step title="Authorized">
+    Request current location
+    
+    ```swift
+    locationManager.requestLocation()
+    ```
+  </Step>
+  
+  <Step title="Denied/Restricted">
+    Show error message directing user to Settings
+    
+    ```swift
+    errorMessage = "Location access denied. Please enable in Settings."
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+Make sure to add the `NSLocationWhenInUseUsageDescription` key to your Info.plist with an appropriate description of why your app needs location access.
+</Warning>
+
+## File Locations
+
+- Component: `BreezeApp/Views/Search/SearchView.swift`
+- Model: `BreezeApp/Models/City.swift`
+- Service: `BreezeApp/Services/GeocodingService.swift`
+- ViewModel: `BreezeApp/ViewModels/DashboardViewModel.swift`

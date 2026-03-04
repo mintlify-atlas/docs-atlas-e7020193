@@ -1,0 +1,244 @@
+---
+title: 'Project Structure'
+description: 'Understanding the Breeze iOS app organization and file structure'
+icon: 'folder-tree'
+---
+
+Breeze follows a clean, modular architecture organized into logical directories. The project contains **24 Swift files** organized across 7 main directories.
+
+## Directory Overview
+
+<CardGroup cols={2}>
+  <Card title="App/" icon="app-window" iconType="solid">
+    Application entry point and root views
+  </Card>
+  <Card title="Models/" icon="database" iconType="solid">
+    Data structures and business logic
+  </Card>
+  <Card title="Services/" icon="server" iconType="solid">
+    API communication and data fetching
+  </Card>
+  <Card title="ViewModels/" icon="layer-group" iconType="solid">
+    State management and business logic
+  </Card>
+  <Card title="Views/" icon="window" iconType="solid">
+    SwiftUI views and components
+  </Card>
+  <Card title="Extensions/" icon="puzzle-piece" iconType="solid">
+    Swift extensions and utilities
+  </Card>
+  <Card title="Resources/" icon="image" iconType="solid">
+    Assets, colors, and resources
+  </Card>
+</CardGroup>
+
+## Complete File Structure
+
+```plaintext BreezeApp Project Structure
+BreezeApp/
+├── App/
+│   ├── BreezeApp.swift           # App entry point (@main)
+│   └── ContentView.swift         # Root container view
+├── Models/
+│   ├── AirQuality.swift          # Air quality data models
+│   ├── AppearanceMode.swift      # Theme preference model
+│   ├── City.swift                # City search models
+│   ├── ClimateData.swift         # Climate data models
+│   ├── PollenData.swift          # Pollen data models
+│   └── Pollutant.swift           # Pollutant definitions
+├── Services/
+│   ├── AirQualityService.swift   # Air quality API client
+│   ├── ClimateService.swift      # Climate data API client
+│   ├── GeocodingService.swift    # Location search API client
+│   └── PollenService.swift       # Pollen data API client
+├── ViewModels/
+│   └── DashboardViewModel.swift  # Main dashboard state
+├── Views/
+│   ├── Components/
+│   │   ├── AnimatedText.swift    # Animated text component
+│   │   ├── HealthTipsView.swift  # Health tips display
+│   │   ├── LoadingView.swift     # Loading state view
+│   │   └── SettingsView.swift    # Settings modal
+│   ├── Dashboard/
+│   │   ├── AQICard.swift         # Main AQI display card
+│   │   └── DashboardView.swift   # Main dashboard screen
+│   ├── Environmental/
+│   │   ├── ClimateChartView.swift # Climate trend chart
+│   │   ├── PollenView.swift      # Pollen level display
+│   │   └── PollutantsGrid.swift  # Pollutants grid
+│   └── Search/
+│       └── SearchView.swift      # City search interface
+├── Extensions/
+│   └── Color+Theme.swift         # Color theme extensions
+└── Resources/
+    └── Assets.xcassets/
+        ├── AccentColor.colorset
+        ├── AppIcon.appiconset
+        └── Background.colorset
+```
+
+## Directory Details
+
+### App/
+
+The application layer containing the entry point and root composition.
+
+<CodeGroup>
+```swift BreezeApp.swift
+import SwiftUI
+
+@main
+struct BreezeApp: App {
+    @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
+    
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+                .preferredColorScheme(appearanceMode.colorScheme)
+        }
+    }
+}
+```
+</CodeGroup>
+
+**Key Files:**
+- `BreezeApp.swift` - Main app entry point with theme configuration
+- `ContentView.swift` - Root view that composes the main UI
+
+### Models/
+
+Pure Swift data structures conforming to `Codable` for API responses.
+
+**Key Files:**
+- `AirQuality.swift` - Air quality data with AQI status calculation
+- `City.swift` - City search results from geocoding API
+- `ClimateData.swift` - Historical temperature data points
+- `PollenData.swift` - Pollen levels for different allergens
+- `Pollutant.swift` - Individual pollutant readings (PM2.5, NO2, etc.)
+- `AppearanceMode.swift` - Light/dark/system theme preference
+
+<Tip>
+Models are lightweight and focused on data representation. Business logic lives in ViewModels and computed properties.
+</Tip>
+
+### Services/
+
+All services are implemented as **actors** for thread-safe API communication.
+
+**Key Files:**
+- `AirQualityService.swift` - Fetches current air quality from Open-Meteo
+- `ClimateService.swift` - Retrieves historical climate data
+- `GeocodingService.swift` - City search and geocoding
+- `PollenService.swift` - Pollen forecast data
+
+<Note>
+Each service is a singleton actor (`static let shared`) ensuring thread-safe access and preventing data races.
+</Note>
+
+### ViewModels/
+
+State management layer connecting services to views.
+
+**Key Files:**
+- `DashboardViewModel.swift` - Main view model managing dashboard state
+
+<Info>
+The ViewModel uses `@MainActor` to ensure all UI updates happen on the main thread, and conforms to `ObservableObject` for SwiftUI reactivity.
+</Info>
+
+### Views/
+
+SwiftUI views organized by feature and component type.
+
+**Subdirectories:**
+- **Components/** - Reusable UI components (loading states, settings, health tips)
+- **Dashboard/** - Main dashboard screen and AQI card
+- **Environmental/** - Climate charts, pollen displays, pollutant grids
+- **Search/** - City search interface
+
+<Tip>
+Views are kept small and focused. Complex views are broken down into smaller, reusable components.
+</Tip>
+
+### Extensions/
+
+Swift extensions for additional functionality.
+
+**Key Files:**
+- `Color+Theme.swift` - Custom color definitions for AQI levels, pollen, and themes
+
+```swift Color Theme Example
+static let aqiGood = Color(hex: "34c759")
+static let aqiModerate = Color(hex: "ff9500")
+static let aqiUnhealthy = Color(hex: "ff3b30")
+```
+
+### Resources/
+
+Asset catalog containing app icons, color sets, and other visual resources.
+
+**Contents:**
+- `AccentColor.colorset` - App-wide accent color
+- `AppIcon.appiconset` - App icon assets
+- `Background.colorset` - Background color for dark/light modes
+
+## File Organization Principles
+
+<AccordionGroup>
+  <Accordion title="Separation of Concerns">
+    Each layer has a single responsibility:
+    - **Models**: Data representation
+    - **Services**: API communication
+    - **ViewModels**: State management and business logic
+    - **Views**: UI presentation
+  </Accordion>
+  
+  <Accordion title="Feature-Based Organization">
+    Views are organized by feature (Dashboard, Environmental, Search) making it easy to locate related files.
+  </Accordion>
+  
+  <Accordion title="Reusability">
+    Common components are extracted into the `Components/` directory and can be used across different screens.
+  </Accordion>
+  
+  <Accordion title="Scalability">
+    The structure supports growth:
+    - New features get their own View subdirectories
+    - New data sources get new Service actors
+    - Shared models remain in Models/
+  </Accordion>
+</AccordionGroup>
+
+## Navigation Guide
+
+<Steps>
+  <Step title="Starting a new feature">
+    1. Create models in `Models/` for data structures
+    2. Create a service actor in `Services/` for API calls
+    3. Create a view model in `ViewModels/` for state management
+    4. Create views in appropriate `Views/` subdirectory
+  </Step>
+  
+  <Step title="Adding reusable components">
+    Place shared UI components in `Views/Components/` for use across features.
+  </Step>
+  
+  <Step title="Extending functionality">
+    Add Swift extensions in `Extensions/` directory (e.g., `Date+Formatting.swift`).
+  </Step>
+  
+  <Step title="Adding resources">
+    Place images, colors, and assets in `Resources/Assets.xcassets/`.
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Design Patterns" icon="shapes" href="/architecture/design-patterns">
+    Learn about MVVM, actors, and architectural patterns
+  </Card>
+  <Card title="Data Models" icon="database" href="/architecture/models">
+    Explore the data models in detail
+  </Card>
+</CardGroup>

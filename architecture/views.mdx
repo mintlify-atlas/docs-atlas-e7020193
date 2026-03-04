@@ -1,0 +1,574 @@
+---
+title: Views
+description: SwiftUI view hierarchy and UI components in Breeze iOS
+---
+
+Breeze uses SwiftUI for its declarative UI framework. The view hierarchy is organized around a main `ContentView` that orchestrates navigation and state management.
+
+## ContentView
+
+Root view of the application managing app-wide state and navigation.
+
+```swift BreezeApp/App/ContentView.swift
+struct ContentView: View {
+    @StateObject private var viewModel = DashboardViewModel()
+    @State private var showSearch = false
+    @State private var showSettings = false
+    @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color.appBackground
+                    .ignoresSafeArea()
+                
+                if viewModel.isLoading && viewModel.airQuality == nil {
+                    LoadingView()
+                } else if let airQuality = viewModel.airQuality {
+                    DashboardView(viewModel: viewModel)
+                } else {
+                    // Landing view with search and location buttons
+                }
+            }
+            .toolbar { /* ... */ }
+            .sheet(isPresented: $showSearch) {
+                SearchView(viewModel: viewModel)
+            }
+            .sheet(isPresented: $showSettings) {
+                SettingsView()
+            }
+        }
+        .preferredColorScheme(appearanceMode.colorScheme)
+    }
+}
+```
+
+### State Management
+
+<ResponseField name="viewModel" type="DashboardViewModel">
+  Main state object for air quality and environmental data
+</ResponseField>
+
+<ResponseField name="showSearch" type="Bool">
+  Controls search sheet presentation
+</ResponseField>
+
+<ResponseField name="showSettings" type="Bool">
+  Controls settings sheet presentation
+</ResponseField>
+
+<ResponseField name="appearanceMode" type="AppearanceMode">
+  Persisted appearance preference (system/light/dark) using `@AppStorage`
+</ResponseField>
+
+### View States
+
+ContentView renders different UI based on data availability:
+
+1. **Loading State** - Shows `LoadingView` spinner
+2. **Dashboard State** - Shows `DashboardView` with data
+3. **Landing State** - Shows welcome screen with search and location options
+
+### Landing View
+
+Initial state when no location data is loaded:
+
+```swift BreezeApp/App/ContentView.swift
+VStack(spacing: 24) {
+    Spacer()
+    
+    // Logo and text
+    HStack(spacing: 12) {
+        Image(systemName: "wind")
+            .font(.system(size: 40, weight: .light))
+            .foregroundStyle(.linearGradient(
+                colors: [.blue, .cyan],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ))
+        
+        Text("Breeze")
+            .font(.system(size: 36, weight: .semibold, design: .rounded))
+    }
+    
+    AnimatedText(text: "Take a deep breath")
+        .font(.title3)
+        .foregroundColor(.secondary)
+    
+    Spacer()
+    
+    // Search button
+    Button {
+        showSearch = true
+    } label: {
+        HStack {
+            Image(systemName: "magnifyingglass")
+            Text("Search for a city")
+            Spacer()
+        }
+        .padding()
+        .background(Color.searchBarBackground)
+        .clipShape(Capsule())
+    }
+    
+    // Location button
+    Button {
+        viewModel.requestLocation()
+    } label: {
+        Label("Use My Location", systemImage: "location.circle.fill")
+    }
+}
+```
+
+### Toolbar
+
+Dynamic toolbar shown when data is loaded:
+
+```swift BreezeApp/App/ContentView.swift
+.toolbar {
+    if viewModel.airQuality != nil {
+        ToolbarItem(placement: .navigationBarLeading) {
+            Button {
+                // Clear data to return to landing page
+                viewModel.airQuality = nil
+                viewModel.pollutants = []
+                viewModel.pollenItems = []
+                viewModel.climateData = []
+                viewModel.locationName = ""
+            } label: {
+                Image(systemName: "house")
+            }
+        }
+        
+        ToolbarItem(placement: .navigationBarTrailing) {
+            HStack(spacing: 16) {
+                Button { showSearch = true } label: {
+                    Image(systemName: "magnifyingglass")
+                }
+                Button { showSettings = true } label: {
+                    Image(systemName: "gearshape")
+                }
+            }
+        }
+    }
+}
+```
+
+## DashboardView
+
+Main dashboard displaying all environmental data.
+
+```swift BreezeApp/Views/Dashboard/DashboardView.swift
+struct DashboardView: View {
+    @ObservedObject var viewModel: DashboardViewModel
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                // Location Header
+                VStack(spacing: 4) {
+                    Text(viewModel.locationName)
+                        .font(.title)
+                        .fontWeight(.semibold)
+                    
+                    Text(Date().formatted(date: .complete, time: .omitted))
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.top)
+                
+                // AQI Card
+                AQICard(viewModel: viewModel)
+                
+                // Pollen Section
+                if !viewModel.pollenItems.isEmpty {
+                    PollenView(items: viewModel.pollenItems)
+                }
+                
+                // Pollutants Grid
+                PollutantsGrid(pollutants: viewModel.pollutants)
+                
+                // Climate Chart
+                if !viewModel.climateData.isEmpty {
+                    ClimateChartView(
+                        data: viewModel.climateData,
+                        useFahrenheit: $viewModel.useFahrenheit,
+                        formatTemp: viewModel.formatTemperature,
+                        formatDiff: viewModel.formatTemperatureDiff
+                    )
+                }
+                
+                Spacer(minLength: 40)
+            }
+            .padding(.horizontal)
+        }
+        .refreshable {
+            // Pull to refresh functionality
+        }
+    }
+}
+```
+
+### Components
+
+<ResponseField name="Location Header" type="VStack">
+  Displays city name and current date
+</ResponseField>
+
+<ResponseField name="AQICard" type="Component">
+  Main air quality index card with status and health tips
+</ResponseField>
+
+<ResponseField name="PollenView" type="Component">
+  Pollen data visualization (conditionally shown)
+</ResponseField>
+
+<ResponseField name="PollutantsGrid" type="Component">
+  Grid of individual pollutant readings
+</ResponseField>
+
+<ResponseField name="ClimateChartView" type="Component">
+  Historical temperature trend chart (conditionally shown)
+</ResponseField>
+
+### Pull to Refresh
+
+The `refreshable` modifier enables pull-to-refresh gesture:
+
+```swift
+.refreshable {
+    if let coords = getCurrentCoordinates() {
+        await viewModel.fetchAllData(latitude: coords.lat, longitude: coords.lon)
+    }
+}
+```
+
+## Dashboard Components
+
+### AQICard
+
+Displays AQI value with color-coded status and health information.
+
+```swift BreezeApp/Views/Dashboard/AQICard.swift
+struct AQICard: View {
+    @ObservedObject var viewModel: DashboardViewModel
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            // AQI number with emoji
+            if let aqi = viewModel.airQuality?.usAQI,
+               let status = viewModel.aqiStatus {
+                Text("\(status.emoji)")
+                    .font(.system(size: 60))
+                
+                Text("\(aqi)")
+                    .font(.system(size: 72, weight: .bold))
+                    .foregroundColor(viewModel.aqiColor)
+                
+                Text(status.text)
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                
+                Text(status.description)
+                    .font(.body)
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(.secondary)
+                
+                // Health tips
+                HealthTipsView(tips: status.tips)
+            }
+        }
+        .padding()
+        .background(Color.cardBackground)
+        .cornerRadius(20)
+    }
+}
+```
+
+### PollutantsGrid
+
+Grid layout showing individual pollutant concentrations.
+
+```swift BreezeApp/Views/Dashboard/PollutantsGrid.swift
+struct PollutantsGrid: View {
+    let pollutants: [PollutantReading]
+    
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+            ForEach(pollutants) { pollutant in
+                PollutantCard(pollutant: pollutant)
+            }
+        }
+    }
+}
+
+struct PollutantCard: View {
+    let pollutant: PollutantReading
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: pollutant.type.icon)
+                    .foregroundColor(pollutant.status.color)
+                Text(pollutant.type.rawValue)
+                    .font(.headline)
+            }
+            
+            Text("\(pollutant.roundedValue) \(pollutant.type.unit)")
+                .font(.title3)
+                .fontWeight(.semibold)
+            
+            Text(pollutant.status.rawValue)
+                .font(.caption)
+                .foregroundColor(pollutant.status.color)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.cardBackground)
+        .cornerRadius(12)
+    }
+}
+```
+
+### PollenView
+
+Horizontal scrolling list of pollen items.
+
+```swift BreezeApp/Views/Environmental/PollenView.swift
+struct PollenView: View {
+    let items: [PollenItem]
+    
+    var body: some View {
+        VStack(alignment: .leading) {
+            Text("Pollen Forecast")
+                .font(.title2)
+                .fontWeight(.semibold)
+                .padding(.horizontal)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(items) { item in
+                        PollenCard(item: item)
+                    }
+                }
+                .padding(.horizontal)
+            }
+        }
+    }
+}
+```
+
+### ClimateChartView
+
+Line chart showing historical temperature trends.
+
+```swift BreezeApp/Views/Environmental/ClimateChartView.swift
+struct ClimateChartView: View {
+    let data: [ClimateDataPoint]
+    @Binding var useFahrenheit: Bool
+    let formatTemp: (Double) -> String
+    let formatDiff: (Double) -> String
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Climate Trends")
+                .font(.title2)
+                .fontWeight(.semibold)
+            
+            // Chart implementation using Charts framework
+            Chart(data) { point in
+                LineMark(
+                    x: .value("Year", point.year),
+                    y: .value("Temperature", point.temperature)
+                )
+                .foregroundStyle(.blue)
+                
+                PointMark(
+                    x: .value("Year", point.year),
+                    y: .value("Temperature", point.temperature)
+                )
+                .foregroundStyle(.blue)
+            }
+            .frame(height: 200)
+        }
+        .padding()
+        .background(Color.cardBackground)
+        .cornerRadius(20)
+    }
+}
+```
+
+## Search View
+
+City search interface with real-time results.
+
+```swift BreezeApp/Views/Search/SearchView.swift
+struct SearchView: View {
+    @ObservedObject var viewModel: DashboardViewModel
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        NavigationStack {
+            VStack {
+                // Search bar
+                TextField("Search for a city", text: $viewModel.searchQuery)
+                    .textFieldStyle(.roundedBorder)
+                    .padding()
+                    .onChange(of: viewModel.searchQuery) { _, newValue in
+                        viewModel.searchCities(newValue)
+                    }
+                
+                // Results list
+                List(viewModel.searchResults) { city in
+                    Button {
+                        viewModel.selectCity(city)
+                        dismiss()
+                    } label: {
+                        VStack(alignment: .leading) {
+                            Text(city.name)
+                                .font(.headline)
+                            Text(city.displayName)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Search")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+}
+```
+
+## Utility Components
+
+### LoadingView
+
+Simple loading indicator.
+
+```swift BreezeApp/Views/Components/LoadingView.swift
+struct LoadingView: View {
+    var body: some View {
+        VStack(spacing: 20) {
+            ProgressView()
+                .scaleEffect(1.5)
+            Text("Loading...")
+                .foregroundColor(.secondary)
+        }
+    }
+}
+```
+
+### AnimatedText
+
+Text with fade-in animation.
+
+```swift BreezeApp/Views/Components/AnimatedText.swift
+struct AnimatedText: View {
+    let text: String
+    @State private var opacity: Double = 0
+    
+    var body: some View {
+        Text(text)
+            .opacity(opacity)
+            .onAppear {
+                withAnimation(.easeIn(duration: 1.0)) {
+                    opacity = 1.0
+                }
+            }
+    }
+}
+```
+
+### HealthTipsView
+
+Scrollable list of health tips.
+
+```swift BreezeApp/Views/Components/HealthTipsView.swift
+struct HealthTipsView: View {
+    let tips: [String]
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Health Tips")
+                .font(.headline)
+            
+            ForEach(tips, id: \.self) { tip in
+                HStack(alignment: .top) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                    Text(tip)
+                        .font(.body)
+                }
+            }
+        }
+        .padding()
+        .background(Color.tipBackground)
+        .cornerRadius(12)
+    }
+}
+```
+
+## Settings View
+
+App settings and preferences.
+
+```swift BreezeApp/Views/Components/SettingsView.swift
+struct SettingsView: View {
+    @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
+    @AppStorage("useFahrenheit") private var useFahrenheit: Bool = true
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Appearance") {
+                    Picker("Theme", selection: $appearanceMode) {
+                        ForEach(AppearanceMode.allCases) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
+                    }
+                }
+                
+                Section("Units") {
+                    Toggle("Use Fahrenheit", isOn: $useFahrenheit)
+                }
+            }
+            .navigationTitle("Settings")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+```
+
+## Theme Colors
+
+Custom colors defined in `Color+Theme.swift`:
+
+- `.appBackground` - Main app background
+- `.cardBackground` - Card and component backgrounds
+- `.searchBarBackground` - Search bar background
+- `.aqiGood` - Good AQI level (green)
+- `.aqiModerate` - Moderate AQI level (yellow)
+- `.aqiUnhealthySensitive` - Unhealthy for sensitive groups (orange)
+- `.aqiUnhealthy` - Unhealthy level (red)
+- `.aqiVeryUnhealthy` - Very unhealthy (purple)
+- `.aqiHazardous` - Hazardous level (maroon)
+
+## View Modifiers
+
+Common view modifiers used throughout:
+
+- `.preferredColorScheme()` - Apply appearance mode
+- `.refreshable` - Pull to refresh
+- `.sheet()` - Present modal sheets
+- `.toolbar()` - Configure navigation bar
+- `.padding()` - Add spacing
+- `.background()` - Apply background colors
+- `.cornerRadius()` - Round corners
+- `.font()` - Typography

@@ -1,97 +1,299 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: Breeze iOS Documentation
+description: Monitor air quality, pollutants, pollen levels, and climate trends worldwide with Breeze for iOS
+mode: custom
 ---
 
-## Setting up
+<div className="relative overflow-hidden dark:bg-[#0f1117] bg-white">
+  {/* Hero Section */}
+  <div className="relative py-20 px-4 sm:px-6 lg:px-8">
+    <div className="absolute inset-0 dark:bg-gradient-to-br dark:from-[#f78804]/10 dark:via-transparent dark:to-transparent bg-gradient-to-br from-[#f78804]/5 via-transparent to-transparent" />
+    
+    <div className="relative max-w-7xl mx-auto">
+      <div className="text-center">
+        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold dark:text-white text-gray-900 mb-6">
+          Breathe Easy with{" "}
+          <span className="text-[#f78804]">Breeze</span>
+        </h1>
+        <p className="text-lg sm:text-xl dark:text-gray-400 text-gray-600 max-w-3xl mx-auto mb-10">
+          A native iOS app for monitoring real-time air quality, pollutants, pollen levels, and climate trends worldwide. Built with Swift and SwiftUI.
+        </p>
+        
+        <div className="flex flex-wrap gap-4 justify-center">
+          <a
+            href="/installation"
+            className="inline-flex items-center px-6 py-3 rounded-lg bg-[#f78804] text-white font-semibold hover:bg-[#95440c] transition-colors"
+          >
+            Get Started
+            <svg className="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            </svg>
+          </a>
+          <a
+            href="/architecture/project-structure"
+            className="inline-flex items-center px-6 py-3 rounded-lg border dark:border-white/30 dark:bg-white/10 dark:text-white border-gray-300 bg-gray-50 text-gray-900 font-semibold dark:hover:border-[#f78804] hover:border-[#f78804] transition-colors"
+          >
+            Explore Architecture
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
-Get your documentation site up and running in minutes.
+{/* Quick Start Section */}
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-semibold dark:text-white text-gray-900 mb-3">
+    Quick start
+  </h2>
+  <p className="dark:text-gray-400 text-gray-600 mb-8">
+    Get Breeze running on your iOS device in minutes
+  </p>
+  
+  <Steps>
+    <Step title="Clone the repository">
+      Clone the Breeze iOS repository from GitHub and navigate to the project directory.
+      
+      ```bash
+      git clone https://github.com/japsinghx/breeze-ios.git
+      cd breeze-ios
+      ```
+    </Step>
+    
+    <Step title="Open in Xcode">
+      Open the Xcode project and select your target device.
+      
+      ```bash
+      open BreezeApp.xcodeproj
+      ```
+      
+      <Note>Requires Xcode 15.0+ and iOS 16.0+</Note>
+    </Step>
+    
+    <Step title="Configure API keys (optional)">
+      For pollen data, add your Google Pollen API key as an environment variable in Xcode. The app works without this key, but pollen tracking will be unavailable.
+      
+      <Accordion title="How to add environment variables in Xcode">
+        1. Go to **Product** → **Scheme** → **Edit Scheme**
+        2. Under **Run** → **Arguments** → **Environment Variables**
+        3. Add: `GOOGLE_POLLEN_API_KEY = your_api_key_here`
+      </Accordion>
+    </Step>
+    
+    <Step title="Build and run">
+      Press `Cmd + R` to build and run the app on your selected device or simulator.
+      
+      <Tip>iPhone 15 recommended for simulator testing</Tip>
+    </Step>
+  </Steps>
+</div>
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
-  </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
-  </Card>
+{/* Core Features Section */}
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-semibold dark:text-white text-gray-900 mb-3">
+    Core features
+  </h2>
+  <p className="dark:text-gray-400 text-gray-600 mb-8">
+    Everything you need to monitor air quality and environmental health
+  </p>
+  
+  <CardGroup cols={2}>
     <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
-  </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
+      title="Real-time air quality"
+      icon="wind"
+      href="/features/air-quality"
+    >
+      View US AQI index for any location worldwide with color-coded health status
+    </Card>
+    <Card
+      title="Pollutant tracking"
+      icon="smog"
+      href="/features/pollutants"
+    >
+      Track PM2.5, PM10, NO₂, SO₂, O₃, and CO levels with detailed breakdowns
+    </Card>
+    <Card
+      title="Pollen monitoring"
+      icon="seedling"
+      href="/features/pollen-tracking"
+    >
+      Monitor grass, tree, and weed pollen levels for allergy management
+    </Card>
+    <Card
+      title="Climate trends"
+      icon="chart-line"
+      href="/features/climate-data"
+    >
+      See historical temperature data and climate patterns for your location
+    </Card>
+    <Card
+      title="Location search"
+      icon="magnifying-glass-location"
+      href="/features/location-search"
+    >
+      Search cities worldwide with autocomplete or use your current location
+    </Card>
+    <Card
+      title="Dark mode"
+      icon="moon"
+      href="/features/dashboard"
+    >
+      Full dark mode support for comfortable viewing any time
+    </Card>
+  </CardGroup>
+</div>
 
-## Create beautiful pages
+{/* Architecture Section */}
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-semibold dark:text-white text-gray-900 mb-3">
+    Architecture
+  </h2>
+  <p className="dark:text-gray-400 text-gray-600 mb-8">
+    Built with modern Swift patterns and clean architecture
+  </p>
+  
+  <CardGroup cols={2}>
+    <Card
+      title="MVVM pattern"
+      icon="diagram-project"
+      href="/architecture/design-patterns"
+    >
+      Clean separation of concerns with ViewModels managing state
+    </Card>
+    <Card
+      title="Service layer"
+      icon="server"
+      href="/architecture/services"
+    >
+      Actor-based services for safe concurrent API calls
+    </Card>
+    <Card
+      title="SwiftUI views"
+      icon="mobile-screen"
+      href="/architecture/views"
+    >
+      Declarative UI with reusable components and modifiers
+    </Card>
+    <Card
+      title="Data models"
+      icon="database"
+      href="/architecture/models"
+    >
+      Codable structs for type-safe JSON decoding
+    </Card>
+  </CardGroup>
+</div>
 
-Everything you need to create world-class documentation.
+{/* API Reference Section */}
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-semibold dark:text-white text-gray-900 mb-3">
+    API reference
+  </h2>
+  <p className="dark:text-gray-400 text-gray-600 mb-8">
+    External APIs and internal services powering Breeze
+  </p>
+  
+  <CardGroup cols={2}>
+    <Card
+      title="Air quality service"
+      icon="cloud"
+      href="/api/services/air-quality-service"
+    >
+      Fetch real-time AQI and pollutant data from Open-Meteo
+    </Card>
+    <Card
+      title="Geocoding service"
+      icon="map-pin"
+      href="/api/services/geocoding-service"
+    >
+      Search cities and resolve coordinates with Open-Meteo Geocoding API
+    </Card>
+    <Card
+      title="Pollen service"
+      icon="leaf"
+      href="/api/services/pollen-service"
+    >
+      Get pollen forecasts from Google Pollen API
+    </Card>
+    <Card
+      title="Climate service"
+      icon="temperature-half"
+      href="/api/services/climate-service"
+    >
+      Historical weather data from Open-Meteo Archive API
+    </Card>
+  </CardGroup>
+</div>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+{/* Resources Section */}
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-semibold dark:text-white text-gray-900 mb-3">
+    Resources
+  </h2>
+  <p className="dark:text-gray-400 text-gray-600 mb-8">
+    Additional resources to help you get the most out of Breeze
+  </p>
+  
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <a
+      href="/requirements"
+      className="group block rounded-2xl border dark:border-[#27272a] border-gray-200 dark:hover:border-[#f78804] hover:border-[#f78804] overflow-hidden no-underline transition-colors"
+    >
+      <div className="p-6">
+        <h3 className="text-base font-semibold dark:text-white text-gray-900 mb-2">
+          System requirements
+        </h3>
+        <p className="text-sm dark:text-gray-400 text-gray-600 mb-3">
+          iOS 16.0+, Xcode 15.0+, Swift 5.9+
+        </p>
+        <div className="flex items-center text-sm dark:text-gray-400 text-gray-600 dark:group-hover:text-[#f78804] group-hover:text-[#f78804]">
+          View details
+          <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      </div>
+    </a>
+    
+    <a
+      href="/configuration/permissions"
+      className="group block rounded-2xl border dark:border-[#27272a] border-gray-200 dark:hover:border-[#f78804] hover:border-[#f78804] overflow-hidden no-underline transition-colors"
+    >
+      <div className="p-6">
+        <h3 className="text-base font-semibold dark:text-white text-gray-900 mb-2">
+          Location permissions
+        </h3>
+        <p className="text-sm dark:text-gray-400 text-gray-600 mb-3">
+          Configure location access for air quality data
+        </p>
+        <div className="flex items-center text-sm dark:text-gray-400 text-gray-600 dark:group-hover:text-[#f78804] group-hover:text-[#f78804]">
+          Learn more
+          <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      </div>
+    </a>
+  </div>
+</div>
 
-## Need inspiration?
-
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+{/* CTA Footer */}
+<div className="mt-20 mb-16 max-w-5xl mx-auto px-6">
+  <div className="rounded-2xl dark:bg-gradient-to-br dark:from-[#f78804]/20 dark:to-[#95440c]/10 bg-gradient-to-br from-[#f78804]/10 to-[#95440c]/5 border dark:border-[#f78804]/30 border-[#f78804]/20 p-8 sm:p-12 text-center">
+    <h2 className="text-2xl sm:text-3xl font-bold dark:text-white text-gray-900 mb-4">
+      Ready to build?
+    </h2>
+    <p className="dark:text-gray-300 text-gray-700 mb-6 max-w-2xl mx-auto">
+      Explore the full documentation to learn how Breeze is built and how you can customize it for your needs.
+    </p>
+    <a
+      href="/architecture/project-structure"
+      className="inline-flex items-center px-6 py-3 rounded-lg bg-[#f78804] text-white font-semibold hover:bg-[#95440c] transition-colors"
+    >
+      Explore the architecture
+      <svg className="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+      </svg>
+    </a>
+  </div>
+</div>

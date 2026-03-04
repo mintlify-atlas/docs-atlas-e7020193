@@ -1,0 +1,264 @@
+---
+title: "Open-Meteo Archive API"
+description: "Historical climate data for long-term temperature trend analysis"
+---
+
+## Overview
+
+Breeze uses the Open-Meteo Archive API to fetch historical climate data, enabling the app to display temperature trends over multiple decades. This powers the climate visualization feature that shows how temperatures have changed at a specific location.
+
+## Base URL
+
+```
+https://archive-api.open-meteo.com/v1/archive
+```
+
+## Endpoints Used
+
+### Get Historical Climate Data
+
+Fetches historical temperature data for specific dates and locations.
+
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `latitude` | Double | Geographic latitude of the location |
+| `longitude` | Double | Geographic longitude of the location |
+| `start_date` | String | Start date in YYYY-MM-DD format |
+| `end_date` | String | End date in YYYY-MM-DD format |
+| `daily` | String | Daily weather variables to include |
+| `timezone` | String | Timezone for the response (set to `"auto"`) |
+
+**Weather Variables:**
+- `temperature_2m_max` - Maximum daily temperature at 2 meters above ground
+
+## Response Format
+
+The API returns historical weather data in the following structure:
+
+```json
+{
+  "daily": {
+    "temperature_2m_max": [23.5]
+  }
+}
+```
+
+For multi-day queries, the temperature array contains multiple values:
+
+```json
+{
+  "daily": {
+    "temperature_2m_max": [21.3, 22.8, 23.5, 24.1, 22.9]
+  }
+}
+```
+
+### Response Model
+
+Breeze decodes the response into these Swift models:
+
+```swift
+struct ClimateArchiveResponse: Codable {
+    let daily: ClimateDaily?
+}
+
+struct ClimateDaily: Codable {
+    let temperatureMax: [Double]?
+    
+    enum CodingKeys: String, CodingKey {
+        case temperatureMax = "temperature_2m_max"
+    }
+}
+
+struct ClimateDataPoint: Identifiable {
+    let id = UUID()
+    let year: Int
+    let temperature: Double
+}
+```
+
+## Usage Example
+
+Breeze queries historical data for the same date across multiple years to show long-term trends:
+
+```swift
+func fetchClimateData(latitude: Double, longitude: Double) async throws -> [ClimateDataPoint] {
+    let today = Date()
+    let calendar = Calendar.current
+    let month = calendar.component(.month, from: today)
+    let day = calendar.component(.day, from: today)
+    let currentYear = calendar.component(.year, from: today)
+    
+    // Query data for these years
+    let years = [1980, 1990, 2000, 2010, 2020, currentYear]
+    
+    var dataPoints: [ClimateDataPoint] = []
+    
+    for year in years {
+        let dateString = String(format: "%d-%02d-%02d", year, month, day)
+        
+        var components = URLComponents(string: baseURL)!
+        components.queryItems = [
+            URLQueryItem(name: "latitude", value: String(latitude)),
+            URLQueryItem(name: "longitude", value: String(longitude)),
+            URLQueryItem(name: "start_date", value: dateString),
+            URLQueryItem(name: "end_date", value: dateString),
+            URLQueryItem(name: "daily", value: "temperature_2m_max"),
+            URLQueryItem(name: "timezone", value: "auto")
+        ]
+        
+        guard let url = components.url else { continue }
+        
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            let decoder = JSONDecoder()
+            let result = try decoder.decode(ClimateArchiveResponse.self, from: data)
+            
+            if let temp = result.daily?.temperatureMax?.first {
+                dataPoints.append(ClimateDataPoint(year: year, temperature: temp))
+            }
+        } catch {
+            print("Error fetching climate data for \(year): \(error)")
+        }
+    }
+    
+    return dataPoints.sorted { $0.year < $1.year }
+}
+```
+
+See ClimateService.swift:10
+
+## Historical Data Strategy
+
+### Sampled Years
+
+Breeze queries data for six specific years to show climate trends:
+
+1. **1980** - Baseline from 40+ years ago
+2. **1990** - 30-year mark
+3. **2000** - Turn of the century
+4. **2010** - Recent decade
+5. **2020** - Very recent
+6. **Current Year** - Today's context
+
+### Same Date Across Years
+
+The service queries the **same month and day** across all years to provide meaningful comparisons. For example, if today is March 15, 2026, it fetches data for:
+
+- March 15, 1980
+- March 15, 1990
+- March 15, 2000
+- March 15, 2010
+- March 15, 2020
+- March 15, 2026
+
+This approach shows how temperatures have changed on this specific date over time.
+
+## Example Request
+
+For San Francisco on March 15, 2026:
+
+```
+GET https://archive-api.open-meteo.com/v1/archive?
+  latitude=37.7749&
+  longitude=-122.4194&
+  start_date=2020-03-15&
+  end_date=2020-03-15&
+  daily=temperature_2m_max&
+  timezone=auto
+```
+
+## Temperature Units
+
+The API returns temperatures in Celsius by default. Temperature values represent:
+
+- **temperature_2m_max**: Maximum temperature at 2 meters above ground level
+- Measured in degrees Celsius
+- Breeze can convert to Fahrenheit for display based on user preferences
+
+## Visualization
+
+The climate data is displayed in a chart showing:
+
+- X-axis: Years (1980 to present)
+- Y-axis: Temperature (°C or °F)
+- Line graph connecting data points
+- Trend visualization to show warming or cooling patterns
+
+## Data Availability
+
+### Historical Coverage
+
+The Open-Meteo Archive API provides:
+
+- **Global coverage** for most locations
+- **Historical data** dating back to 1940 or earlier
+- **Daily resolution** for temperature measurements
+- **Reliable data** from weather stations and reanalysis models
+
+### Data Quality
+
+Some considerations:
+
+- Historical data availability varies by location
+- Remote areas may have sparser historical records
+- The service gracefully handles missing data by skipping failed requests
+
+## Error Handling
+
+The service implements robust error handling:
+
+```swift
+do {
+    let (data, _) = try await URLSession.shared.data(from: url)
+    let result = try decoder.decode(ClimateArchiveResponse.self, from: data)
+    
+    if let temp = result.daily?.temperatureMax?.first {
+        dataPoints.append(ClimateDataPoint(year: year, temperature: temp))
+    }
+} catch {
+    print("Error fetching climate data for \(year): \(error)")
+    // Continue with next year instead of failing entirely
+}
+```
+
+**Error cases:**
+- **Network issues**: Logged and skipped, doesn't prevent other years from loading
+- **Missing data**: Gracefully handled by checking for `nil` values
+- **Invalid dates**: Skipped with `guard let url` check
+- **Decode errors**: Caught and logged without crashing
+
+## Performance Considerations
+
+### Sequential Requests
+
+Breeze makes **sequential requests** for each year rather than parallel requests to:
+
+1. Respect API rate limits
+2. Provide progressive loading feedback
+3. Handle errors for individual years independently
+
+### Caching
+
+Historical climate data rarely changes, making it ideal for caching:
+
+- Data for past years can be cached indefinitely
+- Only the current year needs frequent updates
+- Reduces API calls on subsequent app launches
+
+## Rate Limits
+
+Open-Meteo APIs are free and do not require an API key. They have generous rate limits, but consider:
+
+- Making 6 sequential requests per location query
+- Implementing caching to reduce repeated requests
+- Respecting the free tier limitations
+
+## Reference
+
+- [Open-Meteo Archive API Documentation](https://open-meteo.com/en/docs/historical-weather-api)
+- Service Implementation: `BreezeApp/Services/ClimateService.swift`
+- Data Models: `BreezeApp/Models/ClimateData.swift`
+- Visualization: `BreezeApp/Views/Environmental/ClimateChartView.swift`

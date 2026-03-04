@@ -1,0 +1,92 @@
+---
+title: Introduction
+description: Overview of Breeze - A native iOS app for monitoring air quality worldwide
+---
+
+## What is Breeze?
+
+Breeze is a native iOS application for monitoring air quality, built with Swift and SwiftUI. It provides real-time air quality data for any location worldwide, helping users make informed decisions about their outdoor activities and health.
+
+<Note>
+Breeze uses the US AQI (Air Quality Index) standard to measure and display air quality levels, making it easy to understand air quality conditions at a glance.
+</Note>
+
+## Key Features
+
+Breeze offers comprehensive environmental monitoring with these powerful features:
+
+- **Real-time Air Quality**: View US AQI index for any location worldwide
+- **Pollutant Details**: Track PM2.5, PM10, NO₂, SO₂, O₃, and CO levels with individual readings and status indicators
+- **Pollen/Allergy Tracker**: Monitor grass, tree, and weed pollen levels (requires Google Pollen API)
+- **Climate Trends**: See historical temperature data for your location
+- **City Search**: Search and select cities with autocomplete functionality
+- **Location Services**: Use current location for instant air quality data
+- **Dark Mode**: Automatic dark mode support that adapts to your system preferences
+
+## Architecture Overview
+
+Breeze follows a clean, modular architecture built with modern Swift patterns:
+
+```
+BreezeApp/
+├── App/                    # App entry point and main views
+├── Models/                 # Data models for air quality, pollen, and climate
+├── Services/               # API services for data fetching
+├── ViewModels/            # State management with DashboardViewModel
+├── Views/
+│   ├── Dashboard/         # Main dashboard views and AQI card
+│   ├── Search/            # City search interface
+│   ├── Environmental/     # Pollen and climate views
+│   └── Components/        # Reusable UI components
+├── Extensions/            # Swift extensions for theming
+└── Resources/             # Assets and resources
+```
+
+### Core Technologies
+
+- **SwiftUI**: Modern declarative UI framework
+- **Async/await**: For efficient API calls and data fetching
+- **Actor pattern**: Thread-safe service implementations
+- **@StateObject/@ObservedObject**: Reactive state management
+- **@AppStorage**: Persistent user preferences
+
+### API Integration
+
+Breeze integrates with multiple APIs to provide comprehensive environmental data:
+
+- **Open-Meteo Air Quality API**: Real-time air quality and pollutant data
+- **Open-Meteo Geocoding API**: City search and location services
+- **Google Pollen API** (optional): Pollen and allergy information
+- **Open-Meteo Historical Weather API**: Climate trends and temperature history
+
+<Tip>
+The app works without the Google Pollen API key, but pollen data will not be available. All other features function normally.
+</Tip>
+
+## Understanding AQI Levels
+
+Breeze displays air quality using the US AQI standard with the following categories:
+
+| AQI Range | Status | Description |
+|-----------|--------|-------------|
+| 0-25 | Excellent ✨ | Air quality is pristine |
+| 26-50 | Good 😊 | Air quality is great |
+| 51-75 | Moderate 😐 | Acceptable for most people |
+| 76-100 | Slightly High 😕 | Getting iffy for sensitive groups |
+| 101-150 | Unhealthy for Sensitive Groups 😷 | Sensitive groups should be cautious |
+| 151-200 | Unhealthy 😨 | Everyone may feel effects |
+| 201-300 | Very Unhealthy 🚨 | Serious health concerns |
+| 301+ | Hazardous ☠️ | Emergency conditions |
+
+## Next Steps
+
+Get started with Breeze:
+
+<CardGroup cols={2}>
+  <Card title="Requirements" icon="list-check" href="/requirements">
+    Check system requirements and dependencies
+  </Card>
+  <Card title="Installation" icon="download" href="/installation">
+    Install and set up Breeze on your machine
+  </Card>
+</CardGroup>

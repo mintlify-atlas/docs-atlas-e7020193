@@ -1,0 +1,365 @@
+---
+title: 'PollenService'
+description: 'Actor for fetching pollen data from Google Pollen API via backend proxy'
+---
+
+## Overview
+
+`PollenService` is a Swift actor that fetches pollen data from the Google Pollen API through a backend proxy. It provides detailed pollen information including pollen types (grass, tree, weed) and specific plant data with health recommendations.
+
+```swift
+actor PollenService
+```
+
+**Source**: `BreezeApp/Services/PollenService.swift:4`
+
+## Actor Isolation
+
+This service is implemented as an actor to ensure thread-safe access to its methods and properties. All async methods are actor-isolated and can be safely called from any context.
+
+## Shared Instance
+
+```swift
+static let shared = PollenService()
+```
+
+A singleton instance of the service that can be accessed throughout the application.
+
+## Backend Proxy
+
+The service uses a backend proxy URL instead of calling the Google Pollen API directly:
+
+```swift
+private let baseURL = "https://breeze.earth/api/pollen"
+```
+
+This proxy handles API authentication and rate limiting, ensuring secure access to the Google Pollen API.
+
+## Methods
+
+### fetchPollen
+
+Fetch comprehensive pollen data for a specific location.
+
+```swift
+func fetchPollen(
+    latitude: Double, 
+    longitude: Double
+) async throws -> [PollenItem]
+```
+
+<ParamField path="latitude" type="Double" required>
+  The latitude of the location to fetch pollen data for
+</ParamField>
+
+<ParamField path="longitude" type="Double" required>
+  The longitude of the location to fetch pollen data for
+</ParamField>
+
+**Returns**: `[PollenItem]` - An array of pollen items containing:
+- **Pollen Types**: General categories (Grass, Tree, Weed) with index values and categories
+- **Specific Plants**: Detailed information about individual plants including:
+  - Display name and code
+  - Index value and category (Low, Moderate, High, Very High)
+  - Plant description with image URL
+  - Family, season, and appearance information
+  - Health recommendations
+
+**Throws**:
+- `URLError.badURL` - If the URL cannot be constructed
+- `URLError.badServerResponse` - If the server returns a non-200 status code
+- `DecodingError` - If the response cannot be decoded
+
+**Implementation Details**:
+
+The method processes the API response in two stages:
+
+1. **Pollen Types**: Extracts general pollen type information (grass, tree, weed)
+2. **Plant Information**: Extracts specific plant data with detailed descriptions
+
+```swift
+// Pollen types processing
+if let pollenTypes = dailyInfo.pollenTypeInfo {
+    for type in pollenTypes {
+        items.append(PollenItem(
+            id: type.code,
+            name: type.displayName,
+            value: type.indexInfo?.value ?? 0,
+            category: type.indexInfo?.category ?? "Low",
+            isPlant: false,
+            // ... other properties
+        ))
+    }
+}
+
+// Specific plants processing
+if let plants = dailyInfo.plantInfo {
+    for plant in plants {
+        items.append(PollenItem(
+            id: plant.code,
+            name: displayName,
+            value: plant.indexInfo?.value ?? 0,
+            category: plant.indexInfo?.category ?? "Low",
+            isPlant: true,
+            imageUrl: plant.plantDescription?.picture,
+            // ... other properties
+        ))
+    }
+}
+```
+
+## Usage Examples
+
+### Basic Usage
+
+```swift
+let service = PollenService.shared
+
+do {
+    let pollenData = try await service.fetchPollen(
+        latitude: 37.7749,
+        longitude: -122.4194
+    )
+    
+    for item in pollenData {
+        print("\(item.name): \(item.category) (\(item.value))")
+        
+        if item.isPlant {
+            print("  Plant family: \(item.family ?? "Unknown")")
+            if let recommendations = item.healthRecommendations {
+                print("  Health recommendations: \(recommendations)")
+            }
+        }
+    }
+} catch {
+    print("Failed to fetch pollen data: \(error)")
+}
+```
+
+### Separating Pollen Types and Plants
+
+```swift
+let service = PollenService.shared
+
+do {
+    let allItems = try await service.fetchPollen(
+        latitude: 37.7749,
+        longitude: -122.4194
+    )
+    
+    // Separate pollen types from specific plants
+    let pollenTypes = allItems.filter { !$0.isPlant }
+    let plants = allItems.filter { $0.isPlant }
+    
+    print("=== Pollen Types ===")
+    for type in pollenTypes {
+        print("\(type.name): \(type.category)")
+    }
+    
+    print("\n=== Specific Plants ===")
+    for plant in plants {
+        print("\(plant.name): \(plant.category)")
+        if let imageUrl = plant.imageUrl {
+            print("  Image: \(imageUrl)")
+        }
+    }
+} catch {
+    print("Error: \(error)")
+}
+```
+
+### Display in SwiftUI
+
+```swift
+struct PollenView: View {
+    @State private var pollenItems: [PollenItem] = []
+    @State private var isLoading = false
+    let latitude: Double
+    let longitude: Double
+    
+    var body: some View {
+        List {
+            Section("Pollen Types") {
+                ForEach(pollenItems.filter { !$0.isPlant }) { item in
+                    PollenRowView(item: item)
+                }
+            }
+            
+            Section("Specific Plants") {
+                ForEach(pollenItems.filter { $0.isPlant }) { item in
+                    PlantRowView(item: item)
+                }
+            }
+        }
+        .overlay {
+            if isLoading {
+                ProgressView()
+            }
+        }
+        .task {
+            await loadPollenData()
+        }
+    }
+    
+    func loadPollenData() async {
+        isLoading = true
+        defer { isLoading = false }
+        
+        do {
+            let service = PollenService.shared
+            pollenItems = try await service.fetchPollen(
+                latitude: latitude,
+                longitude: longitude
+            )
+        } catch {
+            print("Failed to load pollen data: \(error)")
+        }
+    }
+}
+
+struct PollenRowView: View {
+    let item: PollenItem
+    
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading) {
+                Text(item.name)
+                    .font(.headline)
+                Text("Index: \(item.value)")
+                    .font(.caption)
+            }
+            
+            Spacer()
+            
+            Text(item.category)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(categoryColor)
+                .foregroundColor(.white)
+                .cornerRadius(8)
+        }
+    }
+    
+    var categoryColor: Color {
+        switch item.category.lowercased() {
+        case "low": return .green
+        case "moderate": return .yellow
+        case "high": return .orange
+        case "very high": return .red
+        default: return .gray
+        }
+    }
+}
+```
+
+## Source Code
+
+```swift
+import Foundation
+
+/// Service for fetching pollen data from Google Pollen API
+actor PollenService {
+    static let shared = PollenService()
+    
+    // Backend proxy URL - your production API
+    private let baseURL = "https://breeze.earth/api/pollen"
+    
+    /// Fetch pollen data for a location via backend proxy
+    func fetchPollen(latitude: Double, longitude: Double) async throws -> [PollenItem] {
+        let urlString = "\(baseURL)?lat=\(latitude)&lon=\(longitude)"
+        
+        guard let url = URL(string: urlString) else {
+            throw URLError(.badURL)
+        }
+        
+        let (data, response) = try await URLSession.shared.data(from: url)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw URLError(.badServerResponse)
+        }
+        
+        let decoder = JSONDecoder()
+        let result = try decoder.decode(PollenResponse.self, from: data)
+        
+        var items: [PollenItem] = []
+        
+        if let dailyInfo = result.dailyInfo?.first {
+            // Add pollen types (Grass, Tree, Weed)
+            if let pollenTypes = dailyInfo.pollenTypeInfo {
+                for type in pollenTypes {
+                    items.append(PollenItem(
+                        id: type.code,
+                        name: type.displayName,
+                        value: type.indexInfo?.value ?? 0,
+                        category: type.indexInfo?.category ?? "Low",
+                        isPlant: false,
+                        imageUrl: nil,
+                        family: nil,
+                        season: nil,
+                        appearance: nil,
+                        healthRecommendations: type.healthRecommendations
+                    ))
+                }
+            }
+            
+            // Add specific plants
+            if let plants = dailyInfo.plantInfo {
+                for plant in plants {
+                    var displayName = plant.displayName
+                    if plant.code == "GRAMINALES" {
+                        displayName = "Graminales"
+                    }
+                    
+                    items.append(PollenItem(
+                        id: plant.code,
+                        name: displayName,
+                        value: plant.indexInfo?.value ?? 0,
+                        category: plant.indexInfo?.category ?? "Low",
+                        isPlant: true,
+                        imageUrl: plant.plantDescription?.picture,
+                        family: plant.plantDescription?.family,
+                        season: plant.plantDescription?.season,
+                        appearance: plant.plantDescription?.specialColors,
+                        healthRecommendations: plant.healthRecommendations
+                    ))
+                }
+            }
+        }
+        
+        return items
+    }
+}
+```
+
+## Special Handling
+
+### GRAMINALES Plant
+
+The service includes special handling for the "GRAMINALES" plant code to ensure proper display formatting:
+
+```swift
+if plant.code == "GRAMINALES" {
+    displayName = "Graminales"
+}
+```
+
+## Data Structure
+
+The returned `PollenItem` objects distinguish between general pollen types and specific plants using the `isPlant` boolean:
+
+- **`isPlant: false`**: General pollen type (Grass, Tree, Weed)
+  - No image, family, season, or appearance data
+  - May include health recommendations
+
+- **`isPlant: true`**: Specific plant species
+  - Includes detailed plant description
+  - Image URL for visual identification
+  - Family, season, and appearance information
+  - Plant-specific health recommendations
+
+## See Also
+
+- [PollenItem Model](/api/models/pollen-item)
+- [PollenResponse Model](/api/models/pollen-response)
+- [Google Pollen API Documentation](https://developers.google.com/maps/documentation/pollen)

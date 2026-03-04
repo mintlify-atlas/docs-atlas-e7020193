@@ -1,0 +1,376 @@
+---
+title: Services
+description: Network services for fetching air quality, pollen, climate, and geocoding data
+---
+
+Breeze uses Swift actors for thread-safe API communication. All services follow the singleton pattern and provide async/await methods for data fetching.
+
+## AirQualityService
+
+Fetches air quality data from the [Open-Meteo Air Quality API](https://open-meteo.com/en/docs/air-quality-api).
+
+<ParamField path="shared" type="AirQualityService" required>
+  Singleton instance for app-wide access
+</ParamField>
+
+### fetchAirQuality
+
+Retrieves current air quality data for specific coordinates.
+
+```swift BreezeApp/Services/AirQualityService.swift
+actor AirQualityService {
+    static let shared = AirQualityService()
+    
+    private let baseURL = "https://air-quality-api.open-meteo.com/v1/air-quality"
+    
+    func fetchAirQuality(latitude: Double, longitude: Double) async throws -> AirQuality {
+        var components = URLComponents(string: baseURL)!
+        components.queryItems = [
+            URLQueryItem(name: "latitude", value: String(latitude)),
+            URLQueryItem(name: "longitude", value: String(longitude)),
+            URLQueryItem(name: "current", value: "us_aqi,pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone"),
+            URLQueryItem(name: "timezone", value: "auto")
+        ]
+        
+        guard let url = components.url else {
+            throw URLError(.badURL)
+        }
+        
+        let (data, response) = try await URLSession.shared.data(from: url)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw URLError(.badServerResponse)
+        }
+        
+        let decoder = JSONDecoder()
+        let result = try decoder.decode(AirQualityResponse.self, from: data)
+        
+        guard let airQuality = result.current else {
+            throw NSError(domain: "AirQualityService", code: 1, 
+                         userInfo: [NSLocalizedDescriptionKey: "No air quality data available"])
+        }
+        
+        return airQuality
+    }
+}
+```
+
+<ParamField path="latitude" type="Double" required>
+  Latitude coordinate (-90 to 90)
+</ParamField>
+
+<ParamField path="longitude" type="Double" required>
+  Longitude coordinate (-180 to 180)
+</ParamField>
+
+<ResponseField name="return" type="AirQuality">
+  Complete air quality data including AQI and all pollutant concentrations
+</ResponseField>
+
+### fetchMultipleCities
+
+Fetches AQI values for multiple cities simultaneously (used for ticker display).
+
+```swift BreezeApp/Services/AirQualityService.swift
+func fetchMultipleCities(_ cities: [TopCity]) async -> [(city: TopCity, aqi: Int?)] {
+    let lats = cities.map { String($0.lat) }.joined(separator: ",")
+    let lons = cities.map { String($0.lon) }.joined(separator: ",")
+    
+    var components = URLComponents(string: baseURL)!
+    components.queryItems = [
+        URLQueryItem(name: "latitude", value: lats),
+        URLQueryItem(name: "longitude", value: lons),
+        URLQueryItem(name: "current", value: "us_aqi")
+    ]
+    
+    guard let url = components.url else {
+        return cities.map { ($0, nil) }
+    }
+    
+    do {
+        let (data, _) = try await URLSession.shared.data(from: url)
+        
+        if let json = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+            return zip(cities, json).map { city, data in
+                let current = data["current"] as? [String: Any]
+                let aqi = current?["us_aqi"] as? Int
+                return (city, aqi)
+            }
+        }
+    } catch {
+        print("Error fetching multiple cities: \(error)")
+    }
+    
+    return cities.map { ($0, nil) }
+}
+```
+
+<ParamField path="cities" type="[TopCity]" required>
+  Array of cities to fetch AQI data for
+</ParamField>
+
+<ResponseField name="return" type="[(city: TopCity, aqi: Int?)]">
+  Array of tuples containing city and optional AQI value
+</ResponseField>
+
+## GeocodingService
+
+Searches for cities using the [Open-Meteo Geocoding API](https://open-meteo.com/en/docs/geocoding-api).
+
+```swift BreezeApp/Services/GeocodingService.swift
+actor GeocodingService {
+    static let shared = GeocodingService()
+    
+    private let baseURL = "https://geocoding-api.open-meteo.com/v1/search"
+    
+    func searchCities(query: String) async throws -> [City] {
+        guard query.count >= 2 else { return [] }
+        
+        var components = URLComponents(string: baseURL)!
+        components.queryItems = [
+            URLQueryItem(name: "name", value: query),
+            URLQueryItem(name: "count", value: "5"),
+            URLQueryItem(name: "language", value: "en"),
+            URLQueryItem(name: "format", value: "json")
+        ]
+        
+        guard let url = components.url else {
+            throw URLError(.badURL)
+        }
+        
+        let (data, response) = try await URLSession.shared.data(from: url)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw URLError(.badServerResponse)
+        }
+        
+        let decoder = JSONDecoder()
+        let result = try decoder.decode(GeocodingResponse.self, from: data)
+        
+        return result.results ?? []
+    }
+}
+```
+
+### searchCities
+
+Searches for cities matching a query string.
+
+<ParamField path="query" type="String" required>
+  Search term (minimum 2 characters)
+</ParamField>
+
+<ResponseField name="return" type="[City]">
+  Up to 5 matching cities with coordinates and location details
+</ResponseField>
+
+<Note>
+  The service returns an empty array if the query is less than 2 characters to avoid unnecessary API calls.
+</Note>
+
+## PollenService
+
+Fetches pollen data through a backend proxy that communicates with the Google Pollen API.
+
+```swift BreezeApp/Services/PollenService.swift
+actor PollenService {
+    static let shared = PollenService()
+    
+    private let baseURL = "https://breeze.earth/api/pollen"
+    
+    func fetchPollen(latitude: Double, longitude: Double) async throws -> [PollenItem] {
+        let urlString = "\(baseURL)?lat=\(latitude)&lon=\(longitude)"
+        
+        guard let url = URL(string: urlString) else {
+            throw URLError(.badURL)
+        }
+        
+        let (data, response) = try await URLSession.shared.data(from: url)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw URLError(.badServerResponse)
+        }
+        
+        let decoder = JSONDecoder()
+        let result = try decoder.decode(PollenResponse.self, from: data)
+        
+        var items: [PollenItem] = []
+        
+        if let dailyInfo = result.dailyInfo?.first {
+            // Add pollen types (Grass, Tree, Weed)
+            if let pollenTypes = dailyInfo.pollenTypeInfo {
+                for type in pollenTypes {
+                    items.append(PollenItem(
+                        id: type.code,
+                        name: type.displayName,
+                        value: type.indexInfo?.value ?? 0,
+                        category: type.indexInfo?.category ?? "Low",
+                        isPlant: false,
+                        imageUrl: nil,
+                        family: nil,
+                        season: nil,
+                        appearance: nil,
+                        healthRecommendations: type.healthRecommendations
+                    ))
+                }
+            }
+            
+            // Add specific plants
+            if let plants = dailyInfo.plantInfo {
+                for plant in plants {
+                    items.append(PollenItem(
+                        id: plant.code,
+                        name: plant.displayName,
+                        value: plant.indexInfo?.value ?? 0,
+                        category: plant.indexInfo?.category ?? "Low",
+                        isPlant: true,
+                        imageUrl: plant.plantDescription?.picture,
+                        family: plant.plantDescription?.family,
+                        season: plant.plantDescription?.season,
+                        appearance: plant.plantDescription?.specialColors,
+                        healthRecommendations: plant.healthRecommendations
+                    ))
+                }
+            }
+        }
+        
+        return items
+    }
+}
+```
+
+### fetchPollen
+
+Retrieves pollen data for specific coordinates via backend proxy.
+
+<ParamField path="latitude" type="Double" required>
+  Latitude coordinate
+</ParamField>
+
+<ParamField path="longitude" type="Double" required>
+  Longitude coordinate
+</ParamField>
+
+<ResponseField name="return" type="[PollenItem]">
+  Array of pollen items including general types (Grass, Tree, Weed) and specific plants (Oak, Birch, etc.)
+</ResponseField>
+
+<Warning>
+  This service requires a backend proxy at `breeze.earth/api/pollen` to handle Google Pollen API authentication. Direct API calls from the iOS app are not supported.
+</Warning>
+
+## ClimateService
+
+Fetches historical temperature data from the [Open-Meteo Historical Weather API](https://open-meteo.com/en/docs/historical-weather-api).
+
+```swift BreezeApp/Services/ClimateService.swift
+actor ClimateService {
+    static let shared = ClimateService()
+    
+    private let baseURL = "https://archive-api.open-meteo.com/v1/archive"
+    
+    func fetchClimateData(latitude: Double, longitude: Double) async throws -> [ClimateDataPoint] {
+        let today = Date()
+        let calendar = Calendar.current
+        let month = calendar.component(.month, from: today)
+        let day = calendar.component(.day, from: today)
+        let currentYear = calendar.component(.year, from: today)
+        
+        let years = [1980, 1990, 2000, 2010, 2020, currentYear]
+        
+        var dataPoints: [ClimateDataPoint] = []
+        
+        for year in years {
+            let dateString = String(format: "%d-%02d-%02d", year, month, day)
+            
+            var components = URLComponents(string: baseURL)!
+            components.queryItems = [
+                URLQueryItem(name: "latitude", value: String(latitude)),
+                URLQueryItem(name: "longitude", value: String(longitude)),
+                URLQueryItem(name: "start_date", value: dateString),
+                URLQueryItem(name: "end_date", value: dateString),
+                URLQueryItem(name: "daily", value: "temperature_2m_max"),
+                URLQueryItem(name: "timezone", value: "auto")
+            ]
+            
+            guard let url = components.url else { continue }
+            
+            do {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                let decoder = JSONDecoder()
+                let result = try decoder.decode(ClimateArchiveResponse.self, from: data)
+                
+                if let temp = result.daily?.temperatureMax?.first {
+                    dataPoints.append(ClimateDataPoint(year: year, temperature: temp))
+                }
+            } catch {
+                print("Error fetching climate data for \(year): \(error)")
+            }
+        }
+        
+        return dataPoints.sorted { $0.year < $1.year }
+    }
+}
+```
+
+### fetchClimateData
+
+Retrieves historical maximum temperature data for today's date across multiple decades.
+
+<ParamField path="latitude" type="Double" required>
+  Latitude coordinate
+</ParamField>
+
+<ParamField path="longitude" type="Double" required>
+  Longitude coordinate
+</ParamField>
+
+<ResponseField name="return" type="[ClimateDataPoint]">
+  Array of temperature data points for years 1980, 1990, 2000, 2010, 2020, and current year
+</ResponseField>
+
+<Info>
+  This method fetches data for the current day of the year across multiple decades to visualize climate change trends. Each year's data is fetched in parallel for better performance.
+</Info>
+
+## Error Handling
+
+All services use Swift's native error handling with `async throws`:
+
+- `URLError.badURL` - Invalid URL construction
+- `URLError.badServerResponse` - Non-200 HTTP status code
+- `DecodingError` - JSON parsing failure
+- Custom `NSError` - Service-specific errors (e.g., no data available)
+
+```swift
+do {
+    let airQuality = try await AirQualityService.shared.fetchAirQuality(
+        latitude: 37.7749,
+        longitude: -122.4194
+    )
+    // Handle success
+} catch {
+    print("Error: \(error.localizedDescription)")
+    // Handle error
+}
+```
+
+## Thread Safety
+
+All services are implemented as Swift `actor` types, ensuring:
+
+- Thread-safe access to shared state
+- No data races
+- Automatic synchronization across concurrent calls
+
+```swift
+// Safe concurrent access
+async let airQuality = AirQualityService.shared.fetchAirQuality(lat: lat, lon: lon)
+async let pollen = PollenService.shared.fetchPollen(lat: lat, lon: lon)
+async let climate = ClimateService.shared.fetchClimateData(lat: lat, lon: lon)
+
+let (aq, pol, clim) = try await (airQuality, pollen, climate)
+```

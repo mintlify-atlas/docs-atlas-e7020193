@@ -1,0 +1,407 @@
+---
+title: 'Pollen Tracking'
+description: 'Comprehensive allergy tracker with plant-specific pollen data powered by Google'
+icon: 'leaf'
+---
+
+## Overview
+
+The Pollen Tracking feature provides allergy sufferers with detailed information about current pollen levels from various plants and pollen types. Powered by Google's Pollen API, it displays data in an easy-to-understand grid format with detailed plant information.
+
+## Implementation
+
+### PollenView Component
+
+The pollen tracker uses a two-column grid layout to display pollen items:
+
+```swift PollenView.swift
+struct PollenView: View {
+    let items: [PollenItem]
+    @State private var selectedPollen: PollenItem?
+    
+    private let columns = [
+        GridItem(.flexible()),
+        GridItem(.flexible())
+    ]
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "leaf.fill")
+                    .foregroundColor(.green)
+                Text("Allergy Tracker")
+                    .font(.headline)
+                
+                Spacer()
+                
+                Text("Powered by Google")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            
+            LazyVGrid(columns: columns, spacing: 8) {
+                ForEach(items) { item in
+                    PollenItemCard(item: item)
+                        .onTapGesture {
+                            selectedPollen = item
+                        }
+                }
+            }
+        }
+        .sheet(item: $selectedPollen) { pollen in
+            PollenDetailSheet(pollen: pollen)
+                .presentationDetents([.large, .medium])
+                .presentationDragIndicator(.visible)
+        }
+    }
+}
+```
+
+### Pollen Item Card
+
+Each pollen type is displayed in a compact card with:
+
+- Pollen name
+- Current level (0-5 scale)
+- Visual progress bar
+- Status text (None, Low, Moderate, High, Very High)
+- Color-coded indicators
+
+```swift PollenView.swift
+struct PollenItemCard: View {
+    let item: PollenItem
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(item.name)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                
+                Spacer()
+                
+                HStack(spacing: 4) {
+                    Text("\(item.value)")
+                        .font(.title3)
+                        .fontWeight(.bold)
+                        .foregroundColor(item.level.color)
+                    
+                    Image(systemName: "info.circle")
+                        .font(.caption)
+                        .foregroundColor(.accentColor)
+                }
+            }
+            
+            // Progress bar (0-5 scale)
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.secondary.opacity(0.2))
+                        .frame(height: 6)
+                    
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(item.level.color)
+                        .frame(width: geometry.size.width * CGFloat(item.value) / 5.0, height: 6)
+                }
+            }
+            .frame(height: 6)
+            
+            Text(item.level.rawValue)
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .padding(10)
+        .background(Color.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}
+```
+
+## Pollen Levels
+
+Pollen is measured on a 0-5 scale with corresponding color coding:
+
+<Steps>
+  <Step title="None (0)" icon="circle">
+    **Color**: Green (#34c759)
+    
+    No pollen detected in the air
+  </Step>
+  <Step title="Low (1)" icon="circle">
+    **Color**: Green (#34c759)
+    
+    Minimal pollen levels, unlikely to cause symptoms
+  </Step>
+  <Step title="Moderate (2-3)" icon="circle">
+    **Color**: Orange (#ff9500)
+    
+    Noticeable pollen levels, sensitive individuals may experience symptoms
+  </Step>
+  <Step title="High (4)" icon="circle">
+    **Color**: Red (#ff3b30)
+    
+    High pollen concentration, most allergy sufferers will be affected
+  </Step>
+  <Step title="Very High (5)" icon="circle">
+    **Color**: Maroon (#8e0000)
+    
+    Extreme pollen levels, severe symptoms likely for those with allergies
+  </Step>
+</Steps>
+
+### Level Calculation
+
+Pollen levels are determined in `PollenData.swift`:
+
+```swift PollenData.swift
+struct PollenItem: Identifiable {
+    let id: String
+    let name: String
+    let value: Int
+    let category: String
+    let isPlant: Bool
+    
+    var level: PollenLevel {
+        switch value {
+        case 0:
+            return .none
+        case 1:
+            return .low
+        case 2...3:
+            return .moderate
+        case 4:
+            return .high
+        case 5...:
+            return .veryHigh
+        default:
+            return .low
+        }
+    }
+}
+
+enum PollenLevel: String {
+    case none = "None"
+    case low = "Low"
+    case moderate = "Moderate"
+    case high = "High"
+    case veryHigh = "Very High"
+}
+```
+
+## Pollen Types Tracked
+
+The app tracks both general pollen categories and specific plant pollens:
+
+### General Categories
+- **Grass** - All grass pollens
+- **Tree** - Tree pollens (various species)
+- **Weed** - Weed pollens
+
+### Specific Plants
+Examples include:
+- Ragweed
+- Oak
+- Birch
+- Pine
+- Cedar
+- And many more...
+
+## Detail Sheet
+
+Tapping a pollen item opens a detailed view with comprehensive information:
+
+```swift PollenView.swift
+struct PollenDetailSheet: View {
+    let pollen: PollenItem
+    
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 20) {
+                    // Hero section with icon and level
+                    VStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(pollen.level.color.opacity(0.15))
+                                .frame(width: 70, height: 70)
+                            
+                            Image(systemName: "leaf.fill")
+                                .font(.system(size: 28, weight: .medium))
+                                .foregroundColor(pollen.level.color)
+                        }
+                        
+                        Text(pollen.name)
+                            .font(.title2)
+                            .fontWeight(.bold)
+                    }
+                    
+                    // Current level with large number
+                    VStack(spacing: 8) {
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Text("\(pollen.value)")
+                                .font(.system(size: 44, weight: .bold, design: .rounded))
+                                .foregroundColor(pollen.level.color)
+                            
+                            Text("/ 5")
+                                .font(.title3)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Text(pollen.level.rawValue)
+                            .font(.caption)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 6)
+                            .background(pollen.level.color)
+                            .clipShape(Capsule())
+                    }
+                    
+                    // Plant image (if available)
+                    if let imageUrl = pollen.imageUrl, let url = URL(string: imageUrl) {
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 260)
+                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                            default:
+                                EmptyView()
+                            }
+                        }
+                    }
+                    
+                    // Plant information
+                    if pollen.family != nil || pollen.season != nil {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("About this Plant")
+                                .font(.headline)
+                            
+                            if let family = pollen.family {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Family")
+                                        .font(.caption)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(.secondary)
+                                    Text(family)
+                                        .font(.subheadline)
+                                }
+                            }
+                            
+                            if let season = pollen.season {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Season")
+                                        .font(.caption)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(.secondary)
+                                    Text(season)
+                                        .font(.subheadline)
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Health recommendations
+                    if let recommendations = pollen.healthRecommendations {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Health Recommendations")
+                                .font(.headline)
+                            
+                            VStack(alignment: .leading, spacing: 10) {
+                                ForEach(recommendations, id: \.self) { recommendation in
+                                    HStack(alignment: .top, spacing: 10) {
+                                        Circle()
+                                            .fill(pollen.level.color.opacity(0.8))
+                                            .frame(width: 6, height: 6)
+                                            .padding(.top, 6)
+                                        
+                                        Text(recommendation)
+                                            .font(.subheadline)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+## Data Structure
+
+Pollen data is structured with comprehensive plant information:
+
+```swift PollenData.swift
+struct PollenItem: Identifiable {
+    let id: String
+    let name: String
+    let value: Int                    // 0-5 scale
+    let category: String
+    let isPlant: Bool                 // true for specific plants, false for general types
+    let imageUrl: String?             // Plant photo from Google
+    let family: String?               // Plant family
+    let season: String?               // Peak pollen season
+    let appearance: String?           // Plant appearance description
+    let healthRecommendations: [String]?  // Health tips
+}
+```
+
+## Google Pollen API Integration
+
+Data is fetched from Google's Pollen API through `PollenService.swift`:
+
+- Provides daily pollen forecasts
+- Includes both general pollen types and specific plant species
+- Returns health recommendations
+- Provides plant images and descriptions
+- Available for locations worldwide
+
+## Color Coding
+
+Pollen level colors are defined in `Color+Theme.swift`:
+
+```swift Color+Theme.swift
+extension Color {
+    static let levelNone = Color(hex: "34c759")     // Green
+    static let levelLow = Color(hex: "34c759")      // Green
+    static let levelModerate = Color(hex: "ff9500") // Orange
+    static let levelHigh = Color(hex: "ff3b30")     // Red
+    static let levelExtreme = Color(hex: "8e0000")  // Maroon
+}
+
+extension PollenLevel {
+    var color: Color {
+        switch self {
+        case .none: return .levelNone
+        case .low: return .levelLow
+        case .moderate: return .levelModerate
+        case .high: return .levelHigh
+        case .veryHigh: return .levelExtreme
+        }
+    }
+}
+```
+
+## Conditional Display
+
+The pollen section only appears when data is available:
+
+```swift DashboardView.swift
+if !viewModel.pollenItems.isEmpty {
+    PollenView(items: viewModel.pollenItems)
+}
+```
+
+This prevents showing an empty section when pollen data is unavailable for a location.
+
+## File Locations
+
+- Component: `BreezeApp/Views/Environmental/PollenView.swift`
+- Model: `BreezeApp/Models/PollenData.swift`
+- Service: `BreezeApp/Services/PollenService.swift`
+- Colors: `BreezeApp/Extensions/Color+Theme.swift`

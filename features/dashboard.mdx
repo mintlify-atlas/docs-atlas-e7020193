@@ -1,0 +1,196 @@
+---
+title: 'Dashboard'
+description: 'Main dashboard view displaying real-time air quality metrics and environmental data'
+icon: 'gauge'
+---
+
+## Overview
+
+The Dashboard is the central hub of Breeze iOS, providing users with a comprehensive view of current air quality, pollen levels, pollutants, and climate trends for their selected location. Built with SwiftUI, it offers a clean, scrollable interface with pull-to-refresh functionality.
+
+## Architecture
+
+The dashboard follows the MVVM (Model-View-ViewModel) pattern:
+
+- **View**: `DashboardView.swift` - The main UI component
+- **ViewModel**: `DashboardViewModel.swift` - Manages state and data fetching
+- **Models**: Various models for air quality, pollutants, pollen, and climate data
+
+### Key Components
+
+The dashboard is composed of several reusable components:
+
+1. **Location Header** - Displays current location and date
+2. **AQI Card** - Shows the US Air Quality Index with visual indicators
+3. **Pollen Section** - Allergy tracker with pollen data (when available)
+4. **Pollutants Grid** - Detailed breakdown of individual pollutants
+5. **Climate Chart** - Historical temperature trends
+
+## Implementation
+
+### DashboardView Structure
+
+The main view is built with a `ScrollView` containing a vertical stack of components:
+
+```swift DashboardView.swift
+struct DashboardView: View {
+    @ObservedObject var viewModel: DashboardViewModel
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                // Location Header
+                VStack(spacing: 4) {
+                    Text(viewModel.locationName)
+                        .font(.title)
+                        .fontWeight(.semibold)
+                    
+                    Text(Date().formatted(date: .complete, time: .omitted))
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.top)
+                
+                // AQI Card
+                AQICard(viewModel: viewModel)
+                
+                // Pollen Section
+                if !viewModel.pollenItems.isEmpty {
+                    PollenView(items: viewModel.pollenItems)
+                }
+                
+                // Pollutants Grid
+                PollutantsGrid(pollutants: viewModel.pollutants)
+                
+                // Climate Chart
+                if !viewModel.climateData.isEmpty {
+                    ClimateChartView(
+                        data: viewModel.climateData,
+                        useFahrenheit: $viewModel.useFahrenheit,
+                        formatTemp: viewModel.formatTemperature,
+                        formatDiff: viewModel.formatTemperatureDiff
+                    )
+                }
+                
+                Spacer(minLength: 40)
+            }
+            .padding(.horizontal)
+        }
+        .refreshable {
+            if let coords = getCurrentCoordinates() {
+                await viewModel.fetchAllData(latitude: coords.lat, longitude: coords.lon)
+            }
+        }
+    }
+}
+```
+
+### ViewModel Data Management
+
+The `DashboardViewModel` manages all dashboard state using `@Published` properties:
+
+```swift DashboardViewModel.swift
+@MainActor
+class DashboardViewModel: NSObject, ObservableObject {
+    @Published var airQuality: AirQuality?
+    @Published var pollutants: [PollutantReading] = []
+    @Published var pollenItems: [PollenItem] = []
+    @Published var climateData: [ClimateDataPoint] = []
+    @Published var locationName: String = ""
+    @Published var isLoading = false
+    @Published var errorMessage: String?
+    
+    // Fetch all data for a location
+    func fetchAllData(latitude: Double, longitude: Double) async {
+        isLoading = true
+        errorMessage = nil
+        
+        // Fetch air quality
+        do {
+            let aq = try await AirQualityService.shared.fetchAirQuality(
+                latitude: latitude,
+                longitude: longitude
+            )
+            self.airQuality = aq
+            
+            // Create pollutant readings
+            self.pollutants = [
+                PollutantReading(type: .pm25, value: aq.pm25),
+                PollutantReading(type: .pm10, value: aq.pm10),
+                PollutantReading(type: .no2, value: aq.nitrogenDioxide),
+                PollutantReading(type: .so2, value: aq.sulphurDioxide),
+                PollutantReading(type: .o3, value: aq.ozone),
+                PollutantReading(type: .co, value: aq.carbonMonoxide)
+            ]
+        } catch {
+            self.errorMessage = "Unable to fetch air quality data."
+        }
+        
+        isLoading = false
+    }
+}
+```
+
+## Features
+
+### Pull-to-Refresh
+
+The dashboard supports pull-to-refresh using SwiftUI's `.refreshable` modifier:
+
+```swift
+.refreshable {
+    if let coords = getCurrentCoordinates() {
+        await viewModel.fetchAllData(latitude: coords.lat, longitude: coords.lon)
+    }
+}
+```
+
+### Dynamic Content
+
+Components are conditionally displayed based on data availability:
+
+- Pollen section only appears when `pollenItems` is not empty
+- Climate chart only appears when `climateData` is available
+- Error states are handled through the `errorMessage` property
+
+### Location Display
+
+The location header shows:
+- Current location name (city, country)
+- Current date in complete format
+- Updates automatically when location changes
+
+## Data Flow
+
+1. User opens the app or changes location
+2. `DashboardViewModel.fetchAllData()` is called with coordinates
+3. Multiple API services fetch data concurrently:
+   - `AirQualityService` for AQI and pollutants
+   - `PollenService` for pollen data
+   - `ClimateService` for historical temperature data
+4. View updates reactively as data arrives
+5. Components render based on available data
+
+## Related Components
+
+<CardGroup cols={2}>
+  <Card title="AQI Card" icon="circle-check" href="/features/air-quality">
+    Visual representation of air quality index
+  </Card>
+  <Card title="Pollutants Grid" icon="wind" href="/features/pollutants">
+    Detailed pollutant measurements
+  </Card>
+  <Card title="Pollen Tracking" icon="leaf" href="/features/pollen-tracking">
+    Allergy and pollen information
+  </Card>
+  <Card title="Climate Data" icon="chart-line" href="/features/climate-data">
+    Historical temperature trends
+  </Card>
+</CardGroup>
+
+## File Locations
+
+- View: `BreezeApp/Views/Dashboard/DashboardView.swift`
+- ViewModel: `BreezeApp/ViewModels/DashboardViewModel.swift`
+- AQI Card: `BreezeApp/Views/Dashboard/AQICard.swift`
+- Pollutants: `BreezeApp/Views/Dashboard/PollutantsGrid.swift`

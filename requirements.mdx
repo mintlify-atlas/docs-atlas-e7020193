@@ -1,0 +1,247 @@
+---
+title: Requirements
+description: System requirements and dependencies for Breeze iOS app
+---
+
+## System Requirements
+
+Before installing Breeze, ensure your development environment meets these requirements:
+
+### iOS Version
+
+<Note>
+Breeze requires **iOS 16.0 or later** to run.
+</Note>
+
+The app uses modern SwiftUI features and APIs that are only available in iOS 16 and above, including:
+- Enhanced navigation with `NavigationStack`
+- `.refreshable` modifier for pull-to-refresh
+- Updated color and theming APIs
+- Improved layout and animation capabilities
+
+### Xcode Version
+
+**Xcode 15.0 or later** is required for development.
+
+The project is configured with:
+- `LastSwiftUpdateCheck: 1500`
+- `LastUpgradeCheck: 1500`
+- Xcode 14.0 compatibility version
+- Build Independent Targets in Parallel enabled
+
+<Warning>
+Using an older version of Xcode may result in build errors or missing features. Always use Xcode 15.0 or later.
+</Warning>
+
+### Swift Version
+
+**Swift 5.9 or later** is required.
+
+Breeze uses modern Swift features including:
+- Async/await for concurrency
+- Actor pattern for thread safety
+- SwiftUI property wrappers (`@StateObject`, `@ObservedObject`, `@AppStorage`)
+- Advanced enum patterns with associated values
+- Result builders
+
+### macOS Version
+
+To run Xcode 15.0, you need:
+- **macOS 13.5 (Ventura)** or later
+- Recommended: **macOS 14.0 (Sonoma)** or later
+
+## Hardware Requirements
+
+### Development Machine
+
+**Minimum:**
+- Mac with Apple Silicon (M1, M2, M3) or Intel processor
+- 8 GB RAM
+- 10 GB available storage
+
+**Recommended:**
+- Mac with Apple Silicon (M1 or later)
+- 16 GB RAM or more
+- 20 GB available storage
+- SSD for faster build times
+
+### Target Devices
+
+**Supported devices:**
+- iPhone (iOS 16.0+)
+- iPad (iOS 16.0+)
+- iPhone Simulator (iOS 16.0+)
+
+**Recommended for testing:**
+- iPhone 15 or later (simulator or physical device)
+- iPhone 14 Pro or later for optimal experience
+- Any iPad running iOS 16.0 or later
+
+<Tip>
+The app supports both portrait and landscape orientations on iPhone and iPad, making it versatile across different device sizes.
+</Tip>
+
+## Dependencies
+
+### Required Dependencies
+
+Breeze has **zero external package dependencies**. The app is built entirely with native iOS frameworks:
+
+- **SwiftUI**: Modern declarative UI framework
+- **Foundation**: Core data structures and networking
+- **CoreLocation**: Location services for "Use My Location" feature
+
+<Note>
+No package managers (CocoaPods, SPM, Carthage) or third-party libraries are required. The project uses only Apple's native frameworks.
+</Note>
+
+### Optional Dependencies
+
+#### Google Pollen API
+
+**Optional but recommended** for full feature access.
+
+- **Purpose**: Provides pollen and allergy data (grass, tree, and weed pollen levels)
+- **Cost**: Free tier available with usage limits
+- **Setup**: Configure as environment variable `GOOGLE_POLLEN_API_KEY`
+- **Documentation**: [Google Pollen API Docs](https://developers.google.com/maps/documentation/pollen)
+
+<Warning>
+Without the Google Pollen API key, the pollen tracking feature will not be available. All other features (air quality, pollutants, climate trends) work without any API keys.
+</Warning>
+
+## API Services
+
+Breeze connects to these external APIs (no authentication required for most):
+
+### Open-Meteo APIs (Free, No API Key)
+
+<CardGroup cols={2}>
+  <Card title="Air Quality API" icon="wind">
+    Provides real-time air quality data including US AQI and individual pollutant levels (PM2.5, PM10, NO₂, SO₂, O₃, CO).
+  </Card>
+  
+  <Card title="Geocoding API" icon="map-pin">
+    Powers city search with autocomplete functionality and coordinate lookup.
+  </Card>
+  
+  <Card title="Historical Weather API" icon="chart-line">
+    Provides temperature trend data for climate charts.
+  </Card>
+</CardGroup>
+
+### Google Pollen API (Optional, Requires API Key)
+
+<Card title="Pollen API" icon="leaf">
+  Provides pollen levels for grass, tree, and weed allergens.
+</Card>
+
+## Deployment Target
+
+The Xcode project is configured with:
+
+```swift
+IPHONEOS_DEPLOYMENT_TARGET = 16.0
+TARGETED_DEVICE_FAMILY = "1,2"  // iPhone and iPad
+SWIFT_VERSION = 5.0
+```
+
+This means:
+- Apps built from this project will run on iOS 16.0 and later
+- Both iPhone (1) and iPad (2) form factors are supported
+- Swift 5.0 is the minimum version (5.9+ recommended)
+
+## Permissions Required
+
+### Location Services
+
+**When in Use** location permission is required for the "Use My Location" feature.
+
+**Privacy description:**
+```
+"Breeze needs your location to show air quality data for your area."
+```
+
+This is configured in the project settings at:
+- `INFOPLIST_KEY_NSLocationWhenInUseUsageDescription`
+
+<Note>
+Users can still use the app without granting location permission by manually searching for cities.
+</Note>
+
+### Network Access
+
+Internet connection is required to fetch:
+- Real-time air quality data
+- City search results
+- Pollen levels (if configured)
+- Historical climate data
+
+## Build Configuration
+
+The project supports two build configurations:
+
+### Debug Configuration
+
+```swift
+GCC_OPTIMIZATION_LEVEL = 0
+SWIFT_OPTIMIZATION_LEVEL = "-Onone"
+ENABLE_TESTABILITY = YES
+DEBUG_INFORMATION_FORMAT = dwarf
+```
+
+### Release Configuration
+
+```swift
+SWIFT_COMPILATION_MODE = wholemodule
+DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym"
+ENABLE_NS_ASSERTIONS = NO
+VALIDATE_PRODUCT = YES
+```
+
+## App Store Submission
+
+If you plan to submit Breeze to the App Store, you'll need:
+
+<Steps>
+  <Step title="Development Team">
+    Add your Apple Developer account team in Xcode project settings.
+  </Step>
+  
+  <Step title="Bundle Identifier">
+    Configure a unique bundle identifier (default: `com.breeze.airquality`).
+  </Step>
+  
+  <Step title="App Icon">
+    Add a 1024x1024 App Icon to `Assets.xcassets`.
+  </Step>
+  
+  <Step title="Screenshots">
+    Create App Store screenshots for required device sizes.
+  </Step>
+  
+  <Step title="App Store Connect">
+    Complete your App Store Connect listing with descriptions and metadata.
+  </Step>
+</Steps>
+
+## Compatibility Matrix
+
+| Component | Minimum | Recommended |
+|-----------|---------|-------------|
+| iOS | 16.0 | 17.0+ |
+| Xcode | 15.0 | 15.3+ |
+| macOS | 13.5 (Ventura) | 14.0+ (Sonoma) |
+| Swift | 5.9 | 5.10+ |
+| Device | iPhone 8 / iPad (5th gen) | iPhone 14+ / iPad Pro |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Installation Guide" icon="download" href="/installation">
+    Ready to install? Follow the step-by-step installation guide.
+  </Card>
+  <Card title="App Overview" icon="book" href="/introduction">
+    Learn more about Breeze's features and architecture.
+  </Card>
+</CardGroup>

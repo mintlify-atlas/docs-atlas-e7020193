@@ -1,0 +1,179 @@
+---
+title: "Open-Meteo Geocoding API"
+description: "City search and location lookup for place-based weather queries"
+---
+
+## Overview
+
+Breeze uses the Open-Meteo Geocoding API to enable users to search for cities by name and retrieve their geographic coordinates. This powers the location search functionality throughout the app.
+
+## Base URL
+
+```
+https://geocoding-api.open-meteo.com/v1/search
+```
+
+## Endpoints Used
+
+### Search Cities by Name
+
+Searches for cities matching a query string and returns up to 5 results.
+
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | String | City name search query (minimum 2 characters) |
+| `count` | Int | Maximum number of results to return (set to 5) |
+| `language` | String | Response language (set to `"en"`) |
+| `format` | String | Response format (set to `"json"`) |
+
+## Response Format
+
+The API returns a JSON response with an array of matching cities:
+
+```json
+{
+  "results": [
+    {
+      "id": 5128581,
+      "name": "New York",
+      "latitude": 40.7128,
+      "longitude": -74.0060,
+      "country": "United States",
+      "admin1": "New York"
+    },
+    {
+      "id": 2643743,
+      "name": "London",
+      "latitude": 51.5074,
+      "longitude": -0.1278,
+      "country": "United Kingdom",
+      "admin1": "England"
+    }
+  ]
+}
+```
+
+### Response Model
+
+Breeze decodes the response into these Swift models:
+
+```swift
+struct GeocodingResponse: Codable {
+    let results: [City]?
+}
+
+struct City: Identifiable, Codable {
+    let id: Int
+    let name: String
+    let country: String?
+    let admin1: String?  // State/province/region
+    let latitude: Double
+    let longitude: Double
+    
+    var displayName: String {
+        var components = [name]
+        if let admin1 = admin1, !admin1.isEmpty {
+            components.append(admin1)
+        }
+        if let country = country, !country.isEmpty {
+            components.append(country)
+        }
+        return components.joined(separator: ", ")
+    }
+}
+```
+
+## Usage Example
+
+Here's how Breeze searches for cities:
+
+```swift
+func searchCities(query: String) async throws -> [City] {
+    guard query.count >= 2 else { return [] }
+    
+    var components = URLComponents(string: baseURL)!
+    components.queryItems = [
+        URLQueryItem(name: "name", value: query),
+        URLQueryItem(name: "count", value: "5"),
+        URLQueryItem(name: "language", value: "en"),
+        URLQueryItem(name: "format", value: "json")
+    ]
+    
+    guard let url = components.url else {
+        throw URLError(.badURL)
+    }
+    
+    let (data, response) = try await URLSession.shared.data(from: url)
+    
+    guard let httpResponse = response as? HTTPURLResponse,
+          httpResponse.statusCode == 200 else {
+        throw URLError(.badServerResponse)
+    }
+    
+    let decoder = JSONDecoder()
+    let result = try decoder.decode(GeocodingResponse.self, from: data)
+    
+    return result.results ?? []
+}
+```
+
+See GeocodingService.swift:10
+
+## Search Behavior
+
+### Minimum Query Length
+
+Breeze requires at least 2 characters before triggering a search to prevent unnecessary API calls and improve user experience.
+
+### Result Limit
+
+The app requests a maximum of 5 results to keep the search interface clean and focused on the most relevant matches.
+
+### Display Format
+
+City results are displayed in the format: `City, State/Region, Country`
+
+Examples:
+- "San Francisco, California, United States"
+- "Paris, Île-de-France, France"
+- "Tokyo, Tokyo, Japan"
+
+## Response Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | Int | Unique identifier for the location |
+| `name` | String | City name |
+| `latitude` | Double | Geographic latitude |
+| `longitude` | Double | Geographic longitude |
+| `country` | String? | Country name |
+| `admin1` | String? | First-level administrative division (state/province/region) |
+
+## Error Handling
+
+The service handles several error cases:
+
+- **Empty query or too short**: Returns empty array without making API call
+- **Invalid URL**: Throws `URLError(.badURL)`
+- **Bad response**: Throws `URLError(.badServerResponse)`
+- **No results**: Returns empty array (when `results` field is `nil`)
+
+## Integration Points
+
+The geocoding service is used in:
+
+1. **City Search Interface**: User-facing search bar for finding locations
+2. **Location Selection**: Converting user input to coordinates
+3. **Dashboard**: Displaying selected city information
+
+## Rate Limits
+
+Open-Meteo APIs are free and do not require an API key. They have generous rate limits suitable for interactive search experiences.
+
+## Reference
+
+- [Open-Meteo Geocoding API Documentation](https://open-meteo.com/en/docs/geocoding-api)
+- Service Implementation: `BreezeApp/Services/GeocodingService.swift`
+- Data Models: `BreezeApp/Models/City.swift`

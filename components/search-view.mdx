@@ -1,0 +1,315 @@
+---
+title: 'Search View'
+description: 'Location search interface with city lookup and current location detection'
+---
+
+## Overview
+
+The `SearchView` component provides a full-screen modal interface for searching and selecting locations. It features a search bar with real-time city lookup, a "Use Current Location" button, search results list, and a curated list of popular cities.
+
+## Visual Display
+
+The search view presents:
+- Navigation bar with "Search" title and Cancel button
+- Rounded search bar with magnifying glass icon
+- Clear button (X) when text is entered
+- "Use Current Location" button with location icon
+- Live search results as user types
+- Popular cities list when search is empty
+- "No results found" state
+
+## Component Definition
+
+```swift
+struct SearchView: View {
+    @ObservedObject var viewModel: DashboardViewModel
+    @Environment(\.dismiss) private var dismiss
+    @FocusState private var isSearchFocused: Bool
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                // Search bar
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.secondary)
+                    
+                    TextField("Search for a city", text: $viewModel.searchQuery)
+                        .focused($isSearchFocused)
+                        .textFieldStyle(.plain)
+                        .autocorrectionDisabled()
+                        .onChange(of: viewModel.searchQuery) { _, newValue in
+                            viewModel.searchCities(newValue)
+                        }
+                    
+                    if !viewModel.searchQuery.isEmpty {
+                        Button {
+                            viewModel.searchQuery = ""
+                            viewModel.searchResults = []
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+                .padding(12)
+                .background(Color.searchBarBackground)
+                .clipShape(Capsule())
+                .padding()
+            }
+            .navigationTitle("Search")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .onAppear {
+            isSearchFocused = true
+        }
+    }
+}
+```
+
+## Props / Parameters
+
+<ParamField path="viewModel" type="DashboardViewModel" required>
+  Observable view model that handles:
+  - `searchQuery`: Current search text (bound to TextField)
+  - `searchResults`: Array of cities matching the search
+  - `searchCities()`: Method to perform city lookup
+  - `selectCity()`: Method to select a city from results
+  - `requestLocation()`: Method to request user's current location
+  - `locationName`: Current location name
+</ParamField>
+
+## Key Features
+
+### Search Bar with Auto-focus
+
+Search bar automatically focuses when view appears:
+
+```swift:6,12-37,150-152
+@FocusState private var isSearchFocused: Bool
+
+HStack {
+    Image(systemName: "magnifyingglass")
+        .foregroundColor(.secondary)
+    
+    TextField("Search for a city", text: $viewModel.searchQuery)
+        .focused($isSearchFocused)
+        .textFieldStyle(.plain)
+        .autocorrectionDisabled()
+        .onChange(of: viewModel.searchQuery) { _, newValue in
+            viewModel.searchCities(newValue)
+        }
+    
+    if !viewModel.searchQuery.isEmpty {
+        Button {
+            viewModel.searchQuery = ""
+            viewModel.searchResults = []
+        } label: {
+            Image(systemName: "xmark.circle.fill")
+                .foregroundColor(.secondary)
+        }
+    }
+}
+
+.onAppear {
+    isSearchFocused = true
+}
+```
+
+### Current Location Button
+
+Prominent button to use device location:
+
+```swift:44-67
+Button {
+    dismiss()
+    viewModel.requestLocation()
+} label: {
+    HStack {
+        Image(systemName: "location.fill")
+            .foregroundColor(.accentColor)
+        
+        Text("Use Current Location")
+            .fontWeight(.medium)
+        
+        Spacer()
+        
+        Image(systemName: "chevron.right")
+            .font(.caption)
+            .foregroundColor(.secondary)
+    }
+    .padding()
+    .background(Color.cardBackground)
+    .clipShape(RoundedRectangle(cornerRadius: 12))
+}
+.buttonStyle(.plain)
+.padding(.horizontal)
+```
+
+### Live Search Results
+
+Displays matching cities as user types (minimum 2 characters):
+
+```swift:68-87
+if !viewModel.searchResults.isEmpty {
+    List(viewModel.searchResults) { city in
+        Button {
+            viewModel.selectCity(city)
+            dismiss()
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(city.name)
+                    .font(.headline)
+                
+                Text(city.displayName)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.vertical, 4)
+        }
+        .buttonStyle(.plain)
+    }
+    .listStyle(.plain)
+}
+```
+
+### Popular Cities List
+
+Displays curated list when search is empty:
+
+```swift:96-136
+VStack(alignment: .leading, spacing: 12) {
+    Text("Popular Cities")
+        .font(.headline)
+        .padding(.horizontal)
+        .padding(.top, 24)
+    
+    ScrollView {
+        LazyVStack(spacing: 0) {
+            ForEach(TopCity.all.prefix(10), id: \.name) { city in
+                Button {
+                    viewModel.locationName = "\(city.name), \(city.country)"
+                    dismiss()
+                    Task {
+                        await viewModel.fetchAllData(latitude: city.lat, longitude: city.lon)
+                    }
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading) {
+                            Text(city.name)
+                                .font(.body)
+                            Text(city.country)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding()
+                }
+                .buttonStyle(.plain)
+                
+                Divider()
+                    .padding(.leading)
+            }
+        }
+    }
+}
+```
+
+### Empty State
+
+Shows when search has no results:
+
+```swift:88-95
+else if viewModel.searchQuery.count >= 2 {
+    VStack {
+        Spacer()
+        Text("No results found")
+            .foregroundColor(.secondary)
+        Spacer()
+    }
+}
+```
+
+## iOS Version Compatibility
+
+The component includes version-specific code for iOS 17's new onChange API:
+
+```swift:16-26
+if #available(iOS 17.0, *) {
+    TextField("Search for a city", text: $viewModel.searchQuery)
+        .focused($isSearchFocused)
+        .textFieldStyle(.plain)
+        .autocorrectionDisabled()
+        .onChange(of: viewModel.searchQuery) { _, newValue in
+            viewModel.searchCities(newValue)
+        }
+} else {
+    // Fallback on earlier versions
+}
+```
+
+## User Flow
+
+1. User taps search icon on dashboard
+2. SearchView presents as modal sheet
+3. Search bar auto-focuses for immediate typing
+4. User can:
+   - Type city name to search (triggers at 2+ characters)
+   - Tap "Use Current Location" to use GPS
+   - Select from popular cities list
+5. Selecting any option dismisses the view and updates dashboard
+
+## Navigation Integration
+
+Modal presentation with toolbar:
+
+```swift:140-148
+.navigationTitle("Search")
+.navigationBarTitleDisplayMode(.inline)
+.toolbar {
+    ToolbarItem(placement: .navigationBarTrailing) {
+        Button("Cancel") {
+            dismiss()
+        }
+    }
+}
+```
+
+## Usage in App
+
+Presented as a sheet from the dashboard:
+
+```swift
+.sheet(isPresented: $showingSearch) {
+    SearchView(viewModel: dashboardViewModel)
+}
+```
+
+## Search Behavior
+
+- Real-time search as user types
+- Minimum 2 characters to trigger search
+- Search query debounced in view model
+- Results include city name and full display name (city, state, country)
+- Clear button appears when text is entered
+
+## Popular Cities
+
+Default list includes major cities worldwide:
+- New York, London, Tokyo, Paris, Los Angeles
+- And 5+ more major metropolitan areas
+
+## Source Location
+
+`BreezeApp/Views/Search/SearchView.swift:3`

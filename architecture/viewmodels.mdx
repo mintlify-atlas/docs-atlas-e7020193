@@ -1,0 +1,409 @@
+---
+title: ViewModels
+description: State management and business logic for Breeze iOS views
+---
+
+Breeze uses the MVVM (Model-View-ViewModel) architecture pattern. The `DashboardViewModel` serves as the central state manager for the app.
+
+## DashboardViewModel
+
+Main view model implementing `ObservableObject` for SwiftUI data binding.
+
+```swift BreezeApp/ViewModels/DashboardViewModel.swift
+@MainActor
+class DashboardViewModel: NSObject, ObservableObject {
+    // Published properties
+    @Published var airQuality: AirQuality?
+    @Published var pollutants: [PollutantReading] = []
+    @Published var pollenItems: [PollenItem] = []
+    @Published var climateData: [ClimateDataPoint] = []
+    @Published var locationName: String = ""
+    @Published var isLoading = false
+    @Published var errorMessage: String?
+    @Published var searchQuery = ""
+    @Published var searchResults: [City] = []
+    @Published var useFahrenheit = true
+    
+    private let locationManager = CLLocationManager()
+    private var searchTask: Task<Void, Never>?
+}
+```
+
+## Published Properties
+
+### Data Properties
+
+<ResponseField name="airQuality" type="AirQuality?">
+  Current air quality data including AQI and pollutant concentrations. `nil` when no data is loaded.
+</ResponseField>
+
+<ResponseField name="pollutants" type="[PollutantReading]">
+  Array of individual pollutant readings (PM2.5, PM10, NO₂, SO₂, O₃, CO) with status calculations.
+</ResponseField>
+
+<ResponseField name="pollenItems" type="[PollenItem]">
+  Pollen data including general types (Grass, Tree, Weed) and specific plants.
+</ResponseField>
+
+<ResponseField name="climateData" type="[ClimateDataPoint]">
+  Historical temperature data for climate trend visualization.
+</ResponseField>
+
+### UI State Properties
+
+<ResponseField name="locationName" type="String">
+  Display name for current location (e.g., "San Francisco, USA" or "Your Location")
+</ResponseField>
+
+<ResponseField name="isLoading" type="Bool">
+  Loading state indicator for UI feedback
+</ResponseField>
+
+<ResponseField name="errorMessage" type="String?">
+  Error message to display to user if data fetch fails
+</ResponseField>
+
+### Search Properties
+
+<ResponseField name="searchQuery" type="String">
+  Current search input text
+</ResponseField>
+
+<ResponseField name="searchResults" type="[City]">
+  Array of city search results from geocoding API
+</ResponseField>
+
+### Settings Properties
+
+<ResponseField name="useFahrenheit" type="Bool">
+  Temperature unit preference (true = Fahrenheit, false = Celsius)
+</ResponseField>
+
+## Computed Properties
+
+### aqiStatus
+
+Computes human-readable status from current AQI value.
+
+```swift BreezeApp/ViewModels/DashboardViewModel.swift
+var aqiStatus: AQIStatus? {
+    guard let aqi = airQuality?.usAQI else { return nil }
+    return AQIStatus.from(aqi: aqi)
+}
+```
+
+<ResponseField name="aqiStatus" type="AQIStatus?">
+  Status object containing text, emoji, description, color, and health tips
+</ResponseField>
+
+### aqiColor
+
+Maps AQI status color name to SwiftUI Color.
+
+```swift BreezeApp/ViewModels/DashboardViewModel.swift
+var aqiColor: Color {
+    guard let status = aqiStatus else { return .gray }
+    switch status.color {
+    case "aqiGood": return .aqiGood
+    case "aqiModerate": return .aqiModerate
+    case "aqiUnhealthySensitive": return .aqiUnhealthySensitive
+    case "aqiUnhealthy": return .aqiUnhealthy
+    case "aqiVeryUnhealthy": return .aqiVeryUnhealthy
+    case "aqiHazardous": return .aqiHazardous
+    default: return .gray
+    }
+}
+```
+
+## Location Methods
+
+### requestLocation
+
+Requests user's current location with authorization handling.
+
+```swift BreezeApp/ViewModels/DashboardViewModel.swift
+func requestLocation() {
+    isLoading = true
+    errorMessage = nil
+    
+    switch locationManager.authorizationStatus {
+    case .notDetermined:
+        locationManager.requestWhenInUseAuthorization()
+    case .authorizedWhenInUse, .authorizedAlways:
+        locationManager.requestLocation()
+    case .denied, .restricted:
+        errorMessage = "Location access denied. Please enable in Settings."
+        isLoading = false
+    @unknown default:
+        errorMessage = "Unknown location authorization status."
+        isLoading = false
+    }
+}
+```
+
+<Note>
+  This method handles all authorization states and provides user-friendly error messages for denied access.
+</Note>
+
+### CLLocationManagerDelegate
+
+Implements location delegate methods for receiving location updates.
+
+```swift BreezeApp/ViewModels/DashboardViewModel.swift
+func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+    guard let location = locations.first else { return }
+    
+    locationName = "Your Location"
+    
+    // Reverse geocode for display name
+    CLGeocoder().reverseGeocodeLocation(location) { [weak self] placemarks, _ in
+        if let placemark = placemarks?.first {
+            var components: [String] = []
+            if let city = placemark.locality {
+                components.append(city)
+            }
+            if let country = placemark.country {
+                components.append(country)
+            }
+            if !components.isEmpty {
+                self?.locationName = components.joined(separator: ", ")
+            }
+        }
+    }
+    
+    Task {
+        await fetchAllData(
+            latitude: location.coordinate.latitude,
+            longitude: location.coordinate.longitude
+        )
+    }
+}
+
+func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+    errorMessage = "Unable to get your location."
+    isLoading = false
+}
+```
+
+## Search Methods
+
+### searchCities
+
+Searches for cities with debouncing to reduce API calls.
+
+```swift BreezeApp/ViewModels/DashboardViewModel.swift
+func searchCities(_ query: String) {
+    searchTask?.cancel()
+    
+    guard query.count >= 2 else {
+        searchResults = []
+        return
+    }
+    
+    searchTask = Task {
+        do {
+            try await Task.sleep(nanoseconds: 300_000_000) // 300ms debounce
+            let results = try await GeocodingService.shared.searchCities(query: query)
+            if !Task.isCancelled {
+                self.searchResults = results
+            }
+        } catch {
+            if !Task.isCancelled {
+                print("Search error: \(error)")
+            }
+        }
+    }
+}
+```
+
+<ParamField path="query" type="String" required>
+  Search term (minimum 2 characters)
+</ParamField>
+
+<Info>
+  The method implements 300ms debouncing to avoid making API calls on every keystroke, improving performance and reducing server load.
+</Info>
+
+### selectCity
+
+Handles city selection from search results.
+
+```swift BreezeApp/ViewModels/DashboardViewModel.swift
+func selectCity(_ city: City) {
+    locationName = city.displayName
+    searchResults = []
+    searchQuery = ""
+    
+    Task {
+        await fetchAllData(latitude: city.latitude, longitude: city.longitude)
+    }
+}
+```
+
+<ParamField path="city" type="City" required>
+  Selected city from search results
+</ParamField>
+
+## Data Fetching Methods
+
+### fetchAllData
+
+Fetches all environmental data for a location (air quality, pollen, climate).
+
+```swift BreezeApp/ViewModels/DashboardViewModel.swift
+func fetchAllData(latitude: Double, longitude: Double) async {
+    isLoading = true
+    errorMessage = nil
+    
+    // Fetch air quality (blocking)
+    do {
+        let aq = try await AirQualityService.shared.fetchAirQuality(
+            latitude: latitude,
+            longitude: longitude
+        )
+        self.airQuality = aq
+        
+        // Create pollutant readings
+        self.pollutants = [
+            PollutantReading(type: .pm25, value: aq.pm25),
+            PollutantReading(type: .pm10, value: aq.pm10),
+            PollutantReading(type: .no2, value: aq.nitrogenDioxide),
+            PollutantReading(type: .so2, value: aq.sulphurDioxide),
+            PollutantReading(type: .o3, value: aq.ozone),
+            PollutantReading(type: .co, value: aq.carbonMonoxide)
+        ]
+    } catch {
+        self.errorMessage = "Unable to fetch air quality data."
+        print("Air quality error: \(error)")
+    }
+    
+    // Fetch pollen data (non-blocking)
+    Task {
+        do {
+            let pollen = try await PollenService.shared.fetchPollen(
+                latitude: latitude,
+                longitude: longitude
+            )
+            self.pollenItems = pollen
+        } catch {
+            print("Pollen error: \(error)")
+        }
+    }
+    
+    // Fetch climate data (non-blocking)
+    Task {
+        do {
+            let climate = try await ClimateService.shared.fetchClimateData(
+                latitude: latitude,
+                longitude: longitude
+            )
+            self.climateData = climate
+        } catch {
+            print("Climate error: \(error)")
+        }
+    }
+    
+    isLoading = false
+}
+```
+
+<ParamField path="latitude" type="Double" required>
+  Latitude coordinate
+</ParamField>
+
+<ParamField path="longitude" type="Double" required>
+  Longitude coordinate
+</ParamField>
+
+<Note>
+  Air quality data is fetched first (blocking) since it's essential for the main UI. Pollen and climate data are fetched in parallel non-blocking tasks to improve perceived performance.
+</Note>
+
+## Temperature Formatting Methods
+
+### formatTemperature
+
+Formats temperature based on user's unit preference.
+
+```swift BreezeApp/ViewModels/DashboardViewModel.swift
+func formatTemperature(_ celsius: Double) -> String {
+    if useFahrenheit {
+        let fahrenheit = (celsius * 9 / 5) + 32
+        return String(format: "%.1f°F", fahrenheit)
+    }
+    return String(format: "%.1f°C", celsius)
+}
+```
+
+<ParamField path="celsius" type="Double" required>
+  Temperature in Celsius
+</ParamField>
+
+<ResponseField name="return" type="String">
+  Formatted temperature string (e.g., "72.0°F" or "22.2°C")
+</ResponseField>
+
+### formatTemperatureDiff
+
+Formats temperature difference with sign indicator.
+
+```swift BreezeApp/ViewModels/DashboardViewModel.swift
+func formatTemperatureDiff(_ celsiusDiff: Double) -> String {
+    let value = useFahrenheit ? celsiusDiff * 9 / 5 : celsiusDiff
+    let unit = useFahrenheit ? "°F" : "°C"
+    let sign = value >= 0 ? "+" : ""
+    return String(format: "%@%.1f%@", sign, value, unit)
+}
+```
+
+<ParamField path="celsiusDiff" type="Double" required>
+  Temperature difference in Celsius
+</ParamField>
+
+<ResponseField name="return" type="String">
+  Formatted difference with sign (e.g., "+3.6°F" or "-1.2°C")
+</ResponseField>
+
+## Usage Example
+
+```swift
+struct ContentView: View {
+    @StateObject private var viewModel = DashboardViewModel()
+    
+    var body: some View {
+        VStack {
+            if let aqi = viewModel.airQuality?.usAQI {
+                Text("AQI: \(aqi)")
+                    .foregroundColor(viewModel.aqiColor)
+                
+                if let status = viewModel.aqiStatus {
+                    Text("\(status.emoji) \(status.text)")
+                    Text(status.description)
+                }
+            }
+            
+            Button("Use My Location") {
+                viewModel.requestLocation()
+            }
+        }
+        .onAppear {
+            viewModel.requestLocation()
+        }
+    }
+}
+```
+
+## Thread Safety
+
+The `@MainActor` attribute ensures all view model operations run on the main thread:
+
+- Safe UI updates from published properties
+- No data races on shared state
+- Automatic thread synchronization
+
+```swift
+@MainActor
+class DashboardViewModel: NSObject, ObservableObject {
+    // All methods and properties guaranteed to run on main thread
+}
+```

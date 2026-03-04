@@ -1,0 +1,254 @@
+---
+title: 'Pollutants Grid'
+description: 'Interactive list displaying individual air pollutant levels with detail sheets'
+---
+
+## Overview
+
+The `PollutantsGrid` component displays a detailed breakdown of individual air pollutants (PM2.5, PM10, NO2, SO2, O3, CO). Each pollutant is shown in a card-style row that users can tap to view comprehensive details in a modal sheet.
+
+## Visual Display
+
+The grid presents:
+- Apple-style grouped list of pollutant cards
+- Color-coded icons for each pollutant type
+- Current concentration values with units
+- Status labels (Good, Moderate, Unhealthy)
+- Tap gesture to open detailed information sheets
+
+## Component Definition
+
+```swift
+struct PollutantsGrid: View {
+    let pollutants: [PollutantReading]
+    @State private var selectedPollutant: PollutantReading?
+    @State private var detentSelection: PresentationDetent = .large
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Section Header
+            HStack {
+                Text("Air Quality Details")
+                    .font(.title3)
+                    .fontWeight(.semibold)
+                
+                Spacer()
+            }
+            .padding(.horizontal, 4)
+            
+            // Pollutant Cards - Apple-style list
+            VStack(spacing: 1) {
+                ForEach(Array(pollutants.enumerated()), id: \.element.id) { index, pollutant in
+                    PollutantRow(pollutant: pollutant)
+                        .onTapGesture {
+                            selectedPollutant = pollutant
+                            detentSelection = .large
+                        }
+                        .background(Color.cardBackground)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .sheet(item: $selectedPollutant) { pollutant in
+            PollutantDetailSheet(pollutant: pollutant)
+                .presentationDetents([.large, .medium], selection: $detentSelection)
+                .presentationDragIndicator(.visible)
+        }
+    }
+}
+```
+
+## Props / Parameters
+
+<ParamField path="pollutants" type="[PollutantReading]" required>
+  Array of pollutant readings to display. Each `PollutantReading` contains:
+  - `type`: Pollutant type (PM2.5, PM10, NO2, SO2, O3, CO)
+  - `value`: Current concentration value
+  - `status`: Health status (Good, Moderate, Unhealthy)
+  - Icon and unit information
+</ParamField>
+
+## Pollutant Row Component
+
+Each row displays a single pollutant with:
+
+```swift:70-128
+struct PollutantRow: View {
+    let pollutant: PollutantReading
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            // Icon with colored background
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(pollutant.status.color.opacity(0.15))
+                    .frame(width: 36, height: 36)
+                
+                Image(systemName: pollutant.type.icon)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(pollutant.status.color)
+            }
+            
+            // Name and description
+            VStack(alignment: .leading, spacing: 2) {
+                Text(pollutant.type.rawValue)
+                    .font(.body)
+                    .fontWeight(.medium)
+                
+                Text(pollutant.type.fullName)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+            }
+            
+            Spacer()
+            
+            // Value and status
+            VStack(alignment: .trailing, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 2) {
+                    Text("\(pollutant.roundedValue)")
+                        .font(.body)
+                        .fontWeight(.semibold)
+                    
+                    Text(pollutant.type.unit)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                
+                Text(pollutant.status.rawValue)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(pollutant.status.color)
+            }
+            
+            // Chevron
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(Color(UIColor.tertiaryLabel))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
+    }
+}
+```
+
+## Detail Sheet
+
+Tapping a pollutant opens a comprehensive detail sheet featuring:
+
+- Large circular icon with status color
+- Current concentration with large typography
+- Status badge
+- "About" section explaining the pollutant
+- Health ranges showing Good/Moderate/Unhealthy thresholds
+
+```swift:130-261
+struct PollutantDetailSheet: View {
+    let pollutant: PollutantReading
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Hero section
+                    VStack(spacing: 16) {
+                        // Icon
+                        ZStack {
+                            Circle()
+                                .fill(pollutant.status.color.opacity(0.15))
+                                .frame(width: 80, height: 80)
+                            
+                            Image(systemName: pollutant.type.icon)
+                                .font(.system(size: 32, weight: .medium))
+                                .foregroundColor(pollutant.status.color)
+                        }
+                    }
+                    
+                    // Current reading card
+                    VStack(spacing: 12) {
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Text("\(pollutant.roundedValue)")
+                                .font(.system(size: 56, weight: .bold, design: .rounded))
+                                .foregroundColor(pollutant.status.color)
+                            
+                            Text(pollutant.type.unit)
+                                .font(.title3)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+## Pollutant Types
+
+The component supports six major air pollutants:
+
+1. **PM2.5** - Fine Particulate Matter (μg/m³)
+2. **PM10** - Coarse Particulate Matter (μg/m³)
+3. **NO2** - Nitrogen Dioxide (μg/m³)
+4. **SO2** - Sulfur Dioxide (μg/m³)
+5. **O3** - Ozone (μg/m³)
+6. **CO** - Carbon Monoxide (μg/m³)
+
+Each has unique icons, health thresholds, and descriptions.
+
+## Health Range Display
+
+The detail sheet includes a `RangeRow` component showing health thresholds:
+
+```swift:263-292
+struct RangeRow: View {
+    let label: String
+    let range: String
+    let color: Color
+    let isActive: Bool
+    
+    var body: some View {
+        HStack {
+            HStack(spacing: 10) {
+                Circle()
+                    .fill(color)
+                    .frame(width: 12, height: 12)
+                
+                Text(label)
+                    .font(.subheadline)
+                    .fontWeight(isActive ? .semibold : .regular)
+            }
+            
+            Spacer()
+            
+            Text(range)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .background(isActive ? color.opacity(0.1) : Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+}
+```
+
+## Usage in App
+
+```swift
+PollutantsGrid(pollutants: [
+    PollutantReading(type: .pm25, value: 15),
+    PollutantReading(type: .pm10, value: 30),
+    PollutantReading(type: .no2, value: 45),
+    PollutantReading(type: .so2, value: 20),
+    PollutantReading(type: .o3, value: 55),
+    PollutantReading(type: .co, value: 3000)
+])
+```
+
+## Source Location
+
+`BreezeApp/Views/Dashboard/PollutantsGrid.swift:3`

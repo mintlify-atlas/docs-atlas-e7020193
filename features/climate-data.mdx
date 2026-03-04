@@ -1,0 +1,331 @@
+---
+title: 'Climate Data'
+description: 'Historical temperature trends showing climate change impact over decades'
+icon: 'chart-line'
+---
+
+## Overview
+
+The Climate Data feature visualizes long-term temperature trends for the user's location, showing how temperatures on the current day have changed across multiple decades. This helps users understand local climate change impacts through historical data comparison.
+
+## Implementation
+
+### ClimateChartView Component
+
+The climate chart uses SwiftUI Charts (iOS 16+) to display temperature data:
+
+```swift ClimateChartView.swift
+import SwiftUI
+import Charts
+
+struct ClimateChartView: View {
+    let data: [ClimateDataPoint]
+    @Binding var useFahrenheit: Bool
+    let formatTemp: (Double) -> String
+    let formatDiff: (Double) -> String
+    
+    private var temperatureChange: Double {
+        guard let first = data.first, let last = data.last else { return 0 }
+        return last.temperature - first.temperature
+    }
+    
+    private var baselineYear: Int {
+        data.first?.year ?? 1980
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header with title and unit toggle
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Image(systemName: "chart.line.uptrend.xyaxis")
+                            .foregroundColor(.orange)
+                        Text("Local Climate Trend")
+                            .font(.headline)
+                    }
+                    
+                    Text("Temperature on this day across decades")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                // Celsius/Fahrenheit toggle
+                HStack(spacing: 8) {
+                    Text("°C")
+                        .font(.caption)
+                        .foregroundColor(!useFahrenheit ? .primary : .secondary)
+                    
+                    Toggle("", isOn: $useFahrenheit)
+                        .labelsHidden()
+                    
+                    Text("°F")
+                        .font(.caption)
+                        .foregroundColor(useFahrenheit ? .primary : .secondary)
+                }
+            }
+            
+            // Temperature change summary
+            HStack {
+                Text("Change since \(baselineYear)")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                
+                Spacer()
+                
+                Text(formatDiff(temperatureChange))
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(temperatureChange > 0 ? .red : .blue)
+            }
+            .padding(.vertical, 8)
+            
+            // Bar chart
+            Chart(data) { point in
+                BarMark(
+                    x: .value("Year", String(point.year)),
+                    y: .value("Temp", displayTemperature(point.temperature))
+                )
+                .foregroundStyle(barColor(for: point))
+                .cornerRadius(4)
+                .annotation(position: .top) {
+                    Text(formatTemp(point.temperature))
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .leading)
+            }
+            .frame(height: 180)
+        }
+        .padding()
+        .background(Color.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+}
+```
+
+## Visual Design
+
+The chart includes several key visual elements:
+
+### Header Section
+- Chart icon and title "Local Climate Trend"
+- Subtitle explaining the data
+- Temperature unit toggle (°C/°F)
+
+### Summary Bar
+- "Change since [baseline year]" label
+- Large, color-coded temperature difference
+- Red for warming, blue for cooling
+
+### Bar Chart
+- One bar per decade (typically 1980, 1990, 2000, 2010, 2020, current year)
+- Bars colored based on temperature deviation from baseline
+- Temperature values annotated above each bar
+- Y-axis with temperature scale
+
+## Color Coding
+
+Bars are color-coded based on deviation from the baseline (first year):
+
+```swift ClimateChartView.swift
+private func barColor(for point: ClimateDataPoint) -> Color {
+    guard let baseline = data.first else { return .gray }
+    let diff = point.temperature - baseline.temperature
+    
+    if diff > 2 {
+        return .red          // Significantly warmer (>2°C increase)
+    } else if diff > 0.5 {
+        return .orange       // Moderately warmer (0.5-2°C increase)
+    } else if diff < -0.5 {
+        return .blue         // Cooler (<0.5°C decrease)
+    } else {
+        return .gray         // Similar to baseline (±0.5°C)
+    }
+}
+```
+
+<Tip>
+The color thresholds are based on climate science:
+- **0.5°C**: Noticeable climate shift
+- **2°C**: Significant warming threshold (Paris Agreement target)
+</Tip>
+
+## Temperature Unit Conversion
+
+The chart supports both Celsius and Fahrenheit:
+
+```swift ClimateChartView.swift
+private func displayTemperature(_ celsius: Double) -> Double {
+    useFahrenheit ? (celsius * 9 / 5) + 32 : celsius
+}
+```
+
+Formatting is handled by the ViewModel:
+
+```swift DashboardViewModel.swift
+func formatTemperature(_ celsius: Double) -> String {
+    if useFahrenheit {
+        let fahrenheit = (celsius * 9 / 5) + 32
+        return String(format: "%.1f°F", fahrenheit)
+    }
+    return String(format: "%.1f°C", celsius)
+}
+
+func formatTemperatureDiff(_ celsiusDiff: Double) -> String {
+    let value = useFahrenheit ? celsiusDiff * 9 / 5 : celsiusDiff
+    let unit = useFahrenheit ? "°F" : "°C"
+    let sign = value >= 0 ? "+" : ""
+    return String(format: "%@%.1f%@", sign, value, unit)
+}
+```
+
+## Data Model
+
+Climate data points are simple year-temperature pairs:
+
+```swift ClimateData.swift
+struct ClimateDataPoint: Identifiable {
+    let id = UUID()
+    let year: Int
+    let temperature: Double  // Always stored in Celsius
+}
+```
+
+## Data Source
+
+Historical temperature data is fetched from Open-Meteo's Archive API via `ClimateService.swift`:
+
+```swift ClimateService.swift
+func fetchClimateData(latitude: Double, longitude: Double) async throws -> [ClimateDataPoint] {
+    // Fetches temperature data for the current day across multiple years
+    // Example: If today is March 4, fetch March 4 temperature for:
+    // 1980, 1990, 2000, 2010, 2020, and current year
+}
+```
+
+The API response structure:
+
+```swift ClimateData.swift
+struct ClimateArchiveResponse: Codable {
+    let daily: ClimateDaily?
+}
+
+struct ClimateDaily: Codable {
+    let temperatureMax: [Double]?
+    
+    enum CodingKeys: String, CodingKey {
+        case temperatureMax = "temperature_2m_max"
+    }
+}
+```
+
+## Fallback for Older iOS
+
+For devices running iOS versions before 16.0 (which don't support SwiftUI Charts), a custom bar chart implementation is provided:
+
+```swift ClimateChartView.swift
+if #available(iOS 16.0, *) {
+    // Use SwiftUI Charts
+    Chart(data) { point in
+        BarMark(...)
+    }
+} else {
+    // Custom bar chart fallback
+    HStack(alignment: .bottom, spacing: 8) {
+        ForEach(data) { point in
+            VStack {
+                Text(formatTemp(point.temperature))
+                    .font(.caption2)
+                
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(barColor(for: point))
+                    .frame(height: barHeight(for: point))
+                
+                Text(String(point.year))
+                    .font(.caption2)
+            }
+        }
+    }
+    .frame(height: 180)
+}
+```
+
+### Custom Bar Height Calculation
+
+```swift ClimateChartView.swift
+private func barHeight(for point: ClimateDataPoint) -> CGFloat {
+    let temps = data.map { $0.temperature }
+    guard let minTemp = temps.min(), let maxTemp = temps.max() else { return 50 }
+    let range = maxTemp - minTemp
+    guard range > 0 else { return 50 }
+    
+    let normalized = (point.temperature - minTemp) / range
+    return CGFloat(normalized) * 100 + 30  // 30-130 point range
+}
+```
+
+## Integration with Dashboard
+
+The climate chart is conditionally displayed when data is available:
+
+```swift DashboardView.swift
+if !viewModel.climateData.isEmpty {
+    ClimateChartView(
+        data: viewModel.climateData,
+        useFahrenheit: $viewModel.useFahrenheit,
+        formatTemp: viewModel.formatTemperature,
+        formatDiff: viewModel.formatTemperatureDiff
+    )
+}
+```
+
+Data is fetched asynchronously:
+
+```swift DashboardViewModel.swift
+// Fetch climate data (non-blocking)
+Task {
+    do {
+        let climate = try await ClimateService.shared.fetchClimateData(
+            latitude: latitude,
+            longitude: longitude
+        )
+        self.climateData = climate
+    } catch {
+        print("Climate error: \(error)")
+    }
+}
+```
+
+## User Preferences
+
+The temperature unit preference is stored in the ViewModel:
+
+```swift DashboardViewModel.swift
+@Published var useFahrenheit = true
+```
+
+Changing the toggle immediately updates all displayed temperatures through SwiftUI's reactive binding system.
+
+## Educational Value
+
+The climate chart helps users:
+- Understand local climate change impacts
+- See tangible evidence of warming trends
+- Compare current conditions to historical baselines
+- Visualize temperature changes over their lifetime
+
+<Note>
+The chart shows temperature for the same calendar day (e.g., March 4) across different years, eliminating seasonal variation and highlighting long-term trends.
+</Note>
+
+## File Locations
+
+- Component: `BreezeApp/Views/Environmental/ClimateChartView.swift`
+- Model: `BreezeApp/Models/ClimateData.swift`
+- Service: `BreezeApp/Services/ClimateService.swift`
+- ViewModel: `BreezeApp/ViewModels/DashboardViewModel.swift`

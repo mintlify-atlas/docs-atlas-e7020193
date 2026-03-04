@@ -1,0 +1,302 @@
+---
+title: Permissions
+description: Configure and handle app permissions in Breeze
+---
+
+## Overview
+
+Breeze requires certain permissions to provide location-based air quality data. All permissions are requested only when needed and include clear explanations for users.
+
+## Required Permissions
+
+### Location Permission
+
+Breeze requests "When In Use" location access to show air quality data for your current location.
+
+#### Privacy Description
+
+The location permission description is defined in `Info.plist`:
+
+```xml Info.plist:51-52
+<key>NSLocationWhenInUseUsageDescription</key>
+<string>Breeze needs your location to show air quality data for your area.</string>
+```
+
+This message appears in the iOS permission dialog when users tap "Use My Location."
+
+<Info>
+  Location permission is **optional**. Users can always search for cities manually without granting location access.
+</Info>
+
+## How Permissions Are Requested
+
+### Location Permission Flow
+
+The app requests location permission when users tap the "Use My Location" button:
+
+```swift DashboardViewModel.swift:52-68
+/// Request user's current location
+func requestLocation() {
+    isLoading = true
+    errorMessage = nil
+    
+    switch locationManager.authorizationStatus {
+    case .notDetermined:
+        locationManager.requestWhenInUseAuthorization()
+    case .authorizedWhenInUse, .authorizedAlways:
+        locationManager.requestLocation()
+    case .denied, .restricted:
+        errorMessage = "Location access denied. Please enable in Settings."
+        isLoading = false
+    @unknown default:
+        errorMessage = "Unknown location authorization status."
+        isLoading = false
+    }
+}
+```
+
+### Authorization Status Handling
+
+The app responds to authorization changes:
+
+```swift DashboardViewModel.swift:215-225
+func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+    switch manager.authorizationStatus {
+    case .authorizedWhenInUse, .authorizedAlways:
+        manager.requestLocation()
+    case .denied, .restricted:
+        errorMessage = "Location access denied."
+        isLoading = false
+    default:
+        break
+    }
+}
+```
+
+<Tip>
+  The app automatically requests location data once permission is granted, providing a seamless user experience.
+</Tip>
+
+## Permission States
+
+<Tabs>
+  <Tab title="Not Determined">
+    **Initial state** when the app hasn't requested permission yet.
+    
+    - App shows the iOS permission dialog when `requestLocation()` is called
+    - User can choose "Allow While Using App" or "Don't Allow"
+  </Tab>
+  <Tab title="Authorized">
+    **Granted** - User has allowed location access.
+    
+    - App can access device location when in use
+    - "Use My Location" button works immediately
+    - Location updates trigger automatic data fetching
+  </Tab>
+  <Tab title="Denied">
+    **Rejected** - User has denied location access.
+    
+    - App shows error message: "Location access denied. Please enable in Settings."
+    - Users can still search for cities manually
+    - To re-enable: **Settings → Breeze → Location → While Using the App**
+  </Tab>
+  <Tab title="Restricted">
+    **System-level restriction** (e.g., parental controls).
+    
+    - Same behavior as "Denied"
+    - User cannot change permission without removing system restrictions
+  </Tab>
+</Tabs>
+
+## Location Manager Setup
+
+The `DashboardViewModel` initializes and manages the location manager:
+
+```swift DashboardViewModel.swift:44-47
+override init() {
+    super.init()
+    locationManager.delegate = self
+}
+```
+
+### CLLocationManagerDelegate
+
+The view model implements location delegate methods:
+
+```swift DashboardViewModel.swift:181-208
+func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+    guard let location = locations.first else { return }
+    
+    locationName = "Your Location"
+    
+    // Reverse geocode to get city name
+    CLGeocoder().reverseGeocodeLocation(location) { [weak self] placemarks, _ in
+        if let placemark = placemarks?.first {
+            var components: [String] = []
+            if let city = placemark.locality {
+                components.append(city)
+            }
+            if let country = placemark.country {
+                components.append(country)
+            }
+            if !components.isEmpty {
+                self?.locationName = components.joined(separator: ", ")
+            }
+        }
+    }
+    
+    Task {
+        await fetchAllData(
+            latitude: location.coordinate.latitude,
+            longitude: location.coordinate.longitude
+        )
+    }
+}
+```
+
+<Note>
+  The app uses reverse geocoding to display a friendly location name (e.g., "San Francisco, United States") instead of raw coordinates.
+</Note>
+
+## User Experience
+
+### Permission Dialog
+
+When users tap "Use My Location" for the first time:
+
+1. iOS shows the standard permission dialog
+2. Dialog includes the custom message from `NSLocationWhenInUseUsageDescription`
+3. User chooses "Allow While Using App" or "Don't Allow"
+
+### Error Handling
+
+If permission is denied or location fails:
+
+```swift DashboardViewModel.swift:210-213
+func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+    errorMessage = "Unable to get your location."
+    isLoading = false
+}
+```
+
+The error message appears in the UI, and users can try again or search for a city manually.
+
+## Privacy Considerations
+
+### App Transport Security
+
+Breeze enforces secure network connections:
+
+```xml Info.plist:53-57
+<key>NSAppTransportSecurity</key>
+<dict>
+    <key>NSAllowsArbitraryLoads</key>
+    <false/>
+</dict>
+```
+
+<Warning>
+  All API requests use HTTPS. HTTP connections are blocked by default for security.
+</Warning>
+
+### Encryption Declaration
+
+For App Store submission:
+
+```xml Info.plist:58-59
+<key>ITSAppUsesNonExemptEncryption</key>
+<false/>
+```
+
+Breeze uses standard iOS encryption and doesn't implement custom cryptography, so this is set to `false`.
+
+## App Store Requirements
+
+When submitting to the App Store, ensure:
+
+<Steps>
+  <Step title="Privacy manifest">
+    Declare all data collection in the privacy manifest (if using Xcode 15+).
+  </Step>
+  <Step title="Permission descriptions">
+    All `NSLocationWhenInUseUsageDescription` strings are clear and explain why permission is needed.
+  </Step>
+  <Step title="Data usage disclosure">
+    Update App Store Connect with data usage details (location data for air quality).
+  </Step>
+  <Step title="Privacy policy">
+    Provide a privacy policy URL if collecting or transmitting user data.
+  </Step>
+</Steps>
+
+## Testing Permissions
+
+### Simulator Testing
+
+<AccordionGroup>
+  <Accordion title="Grant permission">
+    In the iOS Simulator, when the permission dialog appears, click **Allow While Using App**.
+  </Accordion>
+
+  <Accordion title="Deny permission">
+    Click **Don't Allow** in the permission dialog. The app should handle this gracefully with an error message.
+  </Accordion>
+
+  <Accordion title="Reset permissions">
+    - Go to **Settings → Privacy & Security → Location Services**
+    - Find **Breeze** and change the setting
+    - Or reset all permissions: **Simulator → Reset Content and Settings**
+  </Accordion>
+
+  <Accordion title="Simulate location">
+    In Xcode, go to **Debug → Simulate Location** and choose a city (e.g., San Francisco, London).
+  </Accordion>
+</AccordionGroup>
+
+### Device Testing
+
+On a physical device:
+
+1. Install the app via Xcode
+2. Tap "Use My Location"
+3. Grant permission when prompted
+4. Verify that the app receives real location updates
+
+<Tip>
+  Test both indoor and outdoor scenarios, as GPS accuracy varies by environment.
+</Tip>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Permission dialog not showing">
+    - Ensure `NSLocationWhenInUseUsageDescription` is in `Info.plist`
+    - Check that you're calling `requestWhenInUseAuthorization()` correctly
+    - Reset simulator permissions if testing on simulator
+  </Accordion>
+
+  <Accordion title="Location always denied">
+    - Check device/simulator Settings → Privacy → Location Services is ON
+    - Verify the app has location permission in Settings → Breeze → Location
+    - On device, check if parental controls are restricting location access
+  </Accordion>
+
+  <Accordion title="'Location access denied' message stuck">
+    The error message persists until the user takes action. Guide users to:
+    1. Open **Settings**
+    2. Scroll to **Breeze**
+    3. Tap **Location**
+    4. Select **While Using the App**
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Dashboard View" icon="gauge-high" href="/features/dashboard">
+    Learn how the dashboard uses location data
+  </Card>
+  <Card title="Location Services" icon="location-dot" href="/features/location-services">
+    Deep dive into location features
+  </Card>
+</CardGroup>

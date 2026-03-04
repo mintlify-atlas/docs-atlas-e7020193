@@ -1,0 +1,274 @@
+---
+title: 'Air Quality Index'
+description: 'Real-time air quality monitoring with US AQI standards and health recommendations'
+icon: 'circle-check'
+---
+
+## Overview
+
+The Air Quality Index (AQI) card is the centerpiece of the Breeze dashboard, displaying the current air quality using the US EPA Air Quality Index standard. It features an animated circular progress indicator, color-coded status levels, and personalized health recommendations.
+
+## Implementation
+
+### AQICard Component
+
+The AQI card is implemented in `AQICard.swift` as a SwiftUI view that observes the dashboard's view model:
+
+```swift AQICard.swift
+struct AQICard: View {
+    @ObservedObject var viewModel: DashboardViewModel
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            // AQI Circle
+            ZStack {
+                // Background circle
+                Circle()
+                    .stroke(viewModel.aqiColor.opacity(0.2), lineWidth: 12)
+                    .frame(width: 160, height: 160)
+                
+                // Progress circle
+                Circle()
+                    .trim(from: 0, to: progressValue)
+                    .stroke(
+                        viewModel.aqiColor,
+                        style: StrokeStyle(lineWidth: 12, lineCap: .round)
+                    )
+                    .frame(width: 160, height: 160)
+                    .rotationEffect(.degrees(-90))
+                    .animation(.easeInOut(duration: 1.0), value: progressValue)
+                
+                // AQI Value
+                VStack(spacing: 4) {
+                    Text("\(viewModel.airQuality?.usAQI ?? 0)")
+                        .font(.system(size: 56, weight: .bold, design: .rounded))
+                        .foregroundColor(viewModel.aqiColor)
+                    
+                    Text("US AQI")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+    }
+    
+    private var progressValue: CGFloat {
+        guard let aqi = viewModel.airQuality?.usAQI else { return 0 }
+        // Scale AQI 0-500 to 0-1
+        return min(CGFloat(aqi) / 500.0, 1.0)
+    }
+}
+```
+
+### Visual Design
+
+The card features:
+
+1. **Circular Progress Indicator**
+   - Animated progress ring showing AQI value
+   - Color changes based on air quality level
+   - Scales from 0-500 (US AQI range)
+
+2. **Large AQI Number**
+   - Bold, rounded font for easy reading
+   - Color-coded to match air quality status
+   - "US AQI" label below
+
+3. **Status Badge**
+   - Text description (Good, Moderate, Unhealthy, etc.)
+   - Colored circle indicator
+   - Detailed health impact description
+
+4. **Health Tips**
+   - Contextual recommendations based on AQI level
+   - Bulleted list format
+   - Integrated seamlessly into the card
+
+## AQI Status Levels
+
+The app uses the standard US EPA AQI categories, defined in `AirQuality.swift`:
+
+```swift AirQuality.swift
+struct AQIStatus {
+    let text: String
+    let emoji: String
+    let description: String
+    let color: String
+    let tips: [String]
+    
+    static func from(aqi: Int) -> AQIStatus {
+        switch aqi {
+        case 0...25:
+            return AQIStatus(
+                text: "Excellent",
+                emoji: "✨",
+                description: "Air quality is pristine! Perfect day for adventures.",
+                color: "aqiGood",
+                tips: [
+                    "Air is exceptionally clean right now",
+                    "No air quality concerns at this level"
+                ]
+            )
+        case 26...50:
+            return AQIStatus(
+                text: "Good",
+                emoji: "😊",
+                description: "Air quality is great. Breathe easy!",
+                color: "aqiGood",
+                tips: [
+                    "Air quality meets health standards",
+                    "Pollutant levels are low",
+                    "No health risks from air quality"
+                ]
+            )
+        case 51...100:
+            return AQIStatus(
+                text: "Moderate",
+                emoji: "😐",
+                description: "Air quality is acceptable for most people.",
+                color: "aqiModerate",
+                tips: [...]
+            )
+        // ... additional levels
+        }
+    }
+}
+```
+
+### Complete AQI Scale
+
+<AccordionGroup>
+  <Accordion title="Excellent (0-25)" icon="star" iconType="solid">
+    - **Color**: Green (#34c759)
+    - **Description**: Air quality is pristine! Perfect day for adventures.
+    - **Health Impact**: Air is exceptionally clean, no concerns
+  </Accordion>
+
+  <Accordion title="Good (26-50)" icon="face-smile" iconType="solid">
+    - **Color**: Green (#34c759)
+    - **Description**: Air quality is great. Breathe easy!
+    - **Health Impact**: Air quality meets health standards, pollutant levels are low
+  </Accordion>
+
+  <Accordion title="Moderate (51-100)" icon="face-meh" iconType="solid">
+    - **Color**: Orange (#ff9500)
+    - **Description**: Air quality is acceptable for most people.
+    - **Health Impact**: Unusually sensitive people may experience minor effects
+  </Accordion>
+
+  <Accordion title="Unhealthy for Sensitive Groups (101-150)" icon="triangle-exclamation" iconType="solid">
+    - **Color**: Orange-Red (#ff6b00)
+    - **Description**: Sensitive groups should be cautious.
+    - **Health Impact**: May affect children, elderly, and those with respiratory conditions
+  </Accordion>
+
+  <Accordion title="Unhealthy (151-200)" icon="face-frown" iconType="solid">
+    - **Color**: Red (#ff3b30)
+    - **Description**: Everyone may feel the effects now.
+    - **Health Impact**: Air quality is unhealthy for everyone
+  </Accordion>
+
+  <Accordion title="Very Unhealthy (201-300)" icon="siren-on" iconType="solid">
+    - **Color**: Purple (#af52de)
+    - **Description**: Serious health concerns for everyone.
+    - **Health Impact**: Air pollutants are at dangerous levels
+  </Accordion>
+
+  <Accordion title="Hazardous (301+)" icon="skull" iconType="solid">
+    - **Color**: Maroon (#8e0000)
+    - **Description**: Emergency conditions. Seriously bad air.
+    - **Health Impact**: Air quality has reached hazardous levels
+  </Accordion>
+</AccordionGroup>
+
+## Color System
+
+Colors are defined in `Color+Theme.swift` using hex values:
+
+```swift Color+Theme.swift
+extension Color {
+    // AQI Colors
+    static let aqiGood = Color(hex: "34c759")
+    static let aqiModerate = Color(hex: "ff9500")
+    static let aqiUnhealthySensitive = Color(hex: "ff6b00")
+    static let aqiUnhealthy = Color(hex: "ff3b30")
+    static let aqiVeryUnhealthy = Color(hex: "af52de")
+    static let aqiHazardous = Color(hex: "8e0000")
+}
+```
+
+## Health Recommendations
+
+Each AQI level includes tailored health tips displayed in the card:
+
+```swift
+// Health Tips Section
+VStack(alignment: .leading, spacing: 12) {
+    HStack(spacing: 8) {
+        Image(systemName: "heart.fill")
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundColor(.pink)
+        
+        Text("What You Can Do")
+            .font(.subheadline)
+            .fontWeight(.semibold)
+    }
+    
+    VStack(spacing: 10) {
+        ForEach(Array(status.tips.enumerated()), id: \.offset) { index, tip in
+            HStack(alignment: .top, spacing: 10) {
+                Circle()
+                    .fill(viewModel.aqiColor.opacity(0.8))
+                    .frame(width: 6, height: 6)
+                    .padding(.top, 6)
+                
+                Text(tip)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+}
+```
+
+## Sharing Functionality
+
+The AQI card includes a share button using SwiftUI's `ShareLink`:
+
+```swift
+ShareLink(
+    item: "Air Quality in \(viewModel.locationName): AQI \(viewModel.airQuality?.usAQI ?? 0) - \(viewModel.aqiStatus?.text ?? "Unknown")",
+    subject: Text("Air Quality Report"),
+    message: Text("Check out the air quality via Breeze!")
+) {
+    Label("Share", systemImage: "square.and.arrow.up")
+        .font(.subheadline)
+        .fontWeight(.medium)
+}
+.buttonStyle(.bordered)
+.tint(viewModel.aqiColor)
+```
+
+## Data Source
+
+Air quality data is fetched from the Open-Meteo Air Quality API via `AirQualityService.swift:10-39`:
+
+```swift AirQualityService.swift
+func fetchAirQuality(latitude: Double, longitude: Double) async throws -> AirQuality {
+    var components = URLComponents(string: baseURL)!
+    components.queryItems = [
+        URLQueryItem(name: "latitude", value: String(latitude)),
+        URLQueryItem(name: "longitude", value: String(longitude)),
+        URLQueryItem(name: "current", value: "us_aqi,pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone"),
+        URLQueryItem(name: "timezone", value: "auto")
+    ]
+    // ... fetch and decode
+}
+```
+
+## File Locations
+
+- Component: `BreezeApp/Views/Dashboard/AQICard.swift`
+- Model: `BreezeApp/Models/AirQuality.swift`
+- Service: `BreezeApp/Services/AirQualityService.swift`
+- Colors: `BreezeApp/Extensions/Color+Theme.swift`
