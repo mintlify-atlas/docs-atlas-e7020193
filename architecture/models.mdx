@@ -454,3 +454,125 @@ struct ClimateArchiveResponse: Codable {
     let daily: ClimateDaily?
 }
 ```
+
+## Theme Colors
+
+Breeze defines custom color extensions for consistent theming across the app.
+
+### Background Colors
+
+<ParamField path="appBackground" type="Color">
+  Primary app background color (adaptive to light/dark mode)
+</ParamField>
+
+<ParamField path="cardBackground" type="Color">
+  Card and surface backgrounds with improved contrast
+  - Dark mode: `UIColor(white: 0.15, alpha: 1.0)`
+  - Light mode: `UIColor(white: 0.91, alpha: 1.0)`
+</ParamField>
+
+<ParamField path="searchBarBackground" type="Color">
+  Search bar background color
+  - Dark mode: `UIColor(white: 0.2, alpha: 1.0)`
+  - Light mode: `UIColor(white: 0.92, alpha: 1.0)`
+</ParamField>
+
+### AQI Status Colors
+
+<ParamField path="aqiGood" type="Color">
+  Green color for Good air quality (#34c759)
+</ParamField>
+
+<ParamField path="aqiModerate" type="Color">
+  Orange color for Moderate air quality (#ff9500)
+</ParamField>
+
+<ParamField path="aqiUnhealthySensitive" type="Color">
+  Orange-red for Unhealthy for Sensitive Groups (#ff6b00)
+</ParamField>
+
+<ParamField path="aqiUnhealthy" type="Color">
+  Red color for Unhealthy air quality (#ff3b30)
+</ParamField>
+
+<ParamField path="aqiVeryUnhealthy" type="Color">
+  Purple color for Very Unhealthy (#af52de)
+</ParamField>
+
+<ParamField path="aqiHazardous" type="Color">
+  Dark red for Hazardous air quality (#8e0000)
+</ParamField>
+
+### Pollen Level Colors
+
+<ParamField path="levelNone" type="Color">
+  Green for no pollen (#34c759)
+</ParamField>
+
+<ParamField path="levelLow" type="Color">
+  Green for low pollen levels (#34c759)
+</ParamField>
+
+<ParamField path="levelModerate" type="Color">
+  Orange for moderate pollen levels (#ff9500)
+</ParamField>
+
+<ParamField path="levelHigh" type="Color">
+  Red for high pollen levels (#ff3b30)
+</ParamField>
+
+<ParamField path="levelExtreme" type="Color">
+  Dark red for extreme pollen levels (#8e0000)
+</ParamField>
+
+### Climate Trend Colors
+
+<ParamField path="climateNeutral" type="Color">
+  Gray for neutral temperature change
+</ParamField>
+
+<ParamField path="climateCool" type="Color">
+  Green for cooling trends (#34c759)
+</ParamField>
+
+<ParamField path="climateWarm" type="Color">
+  Orange for warming trends (#ff9500)
+</ParamField>
+
+<ParamField path="climateHot" type="Color">
+  Red for significant warming (#ff3b30)
+</ParamField>
+
+```swift BreezeApp/Extensions/Color+Theme.swift:3-40
+extension Color {
+    // MARK: - Background Colors
+    static let appBackground = Color("Background")
+    
+    static let cardBackground = Color(UIColor { traitCollection in
+        traitCollection.userInterfaceStyle == .dark
+            ? UIColor(white: 0.15, alpha: 1.0)
+            : UIColor(white: 0.91, alpha: 1.0)
+    })
+    
+    // MARK: - AQI Colors
+    static let aqiGood = Color(hex: "34c759")
+    static let aqiModerate = Color(hex: "ff9500")
+    static let aqiUnhealthySensitive = Color(hex: "ff6b00")
+    static let aqiUnhealthy = Color(hex: "ff3b30")
+    static let aqiVeryUnhealthy = Color(hex: "af52de")
+    static let aqiHazardous = Color(hex: "8e0000")
+    
+    // MARK: - Pollen Level Colors
+    static let levelNone = Color(hex: "34c759")
+    static let levelLow = Color(hex: "34c759")
+    static let levelModerate = Color(hex: "ff9500")
+    static let levelHigh = Color(hex: "ff3b30")
+    static let levelExtreme = Color(hex: "8e0000")
+    
+    // MARK: - Climate Colors
+    static let climateNeutral = Color.gray
+    static let climateCool = Color(hex: "34c759")
+    static let climateWarm = Color(hex: "ff9500")
+    static let climateHot = Color(hex: "ff3b30")
+}
+```
