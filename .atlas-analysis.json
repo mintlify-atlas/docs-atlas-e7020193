@@ -1,0 +1,127 @@
+{
+  "projectType": "frontend",
+  "projectName": "Breeze iOS",
+  "projectDescription": "A native iOS app for monitoring real-time air quality, pollutants, pollen levels, and climate trends worldwide.",
+  "theme": "almond",
+  "primaryColor": "#f78804",
+  "lightColor": "#95440c",
+  "darkColor": "#040404",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "requirements"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/dashboard",
+              "features/air-quality",
+              "features/pollutants",
+              "features/pollen-tracking",
+              "features/climate-data",
+              "features/location-search"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/setup",
+              "configuration/api-keys",
+              "configuration/permissions"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Architecture",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "architecture/project-structure",
+              "architecture/design-patterns"
+            ]
+          },
+          {
+            "group": "Core Components",
+            "pages": [
+              "architecture/models",
+              "architecture/services",
+              "architecture/viewmodels",
+              "architecture/views"
+            ]
+          },
+          {
+            "group": "UI Components",
+            "pages": [
+              "components/aqi-card",
+              "components/pollutants-grid",
+              "components/pollen-view",
+              "components/climate-chart",
+              "components/search-view"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "External APIs",
+            "pages": [
+              "api/open-meteo-air-quality",
+              "api/open-meteo-geocoding",
+              "api/google-pollen",
+              "api/open-meteo-archive"
+            ]
+          },
+          {
+            "group": "Services",
+            "pages": [
+              "api/services/air-quality-service",
+              "api/services/geocoding-service",
+              "api/services/pollen-service",
+              "api/services/climate-service"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Real-time US AQI monitoring for any location worldwide",
+    "Detailed pollutant tracking (PM2.5, PM10, NO₂, SO₂, O₃, CO)",
+    "Pollen and allergy monitoring (grass, tree, weed)",
+    "Historical climate trend analysis",
+    "City search with autocomplete",
+    "Location-based air quality data",
+    "Dark mode support",
+    "Health tips based on AQI levels"
+  ],
+  "publicApiSurface": [
+    "AirQualityService.fetchAirQuality(latitude:longitude:)",
+    "GeocodingService.searchCities(query:)",
+    "PollenService.fetchPollen(latitude:longitude:)",
+    "ClimateService.fetchClimateData(latitude:longitude:)",
+    "DashboardViewModel.requestLocation()",
+    "DashboardViewModel.searchCities(_:)",
+    "DashboardViewModel.selectCity(_:)",
+    "DashboardViewModel.fetchAllData(latitude:longitude:)",
+    "AQIStatus.from(aqi:)",
+    "Color.appBackground",
+    "Color.aqiGood",
+    "Color.aqiModerate",
+    "Color.aqiUnhealthySensitive",
+    "Color.aqiUnhealthy",
+    "Color.aqiVeryUnhealthy",
+    "Color.aqiHazardous"
+  ]
+}
